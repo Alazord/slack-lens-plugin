@@ -1,6 +1,6 @@
 ---
-name: slack-lens-refresh
-description: Refreshes the SlackLens dashboard with the latest mentions, DMs, and active threads from Slack. Use when the user says "refresh slack lens", "reload slacklens", "update my slack triage", or when triggered automatically by the scheduled task.
+name: slacklens-refresh
+description: Refreshes the SlackLens dashboard with the latest mentions, DMs, and active threads from Slack. Use when the user says "refresh slacklens", "refresh slack lens", "reload slacklens", "update my slack triage", or when triggered automatically by the scheduled task.
 ---
 
 You are refreshing SlackLens for the connected Slack user.

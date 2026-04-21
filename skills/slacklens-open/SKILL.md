@@ -1,6 +1,6 @@
 ---
-name: slack-lens-open
-description: Opens the SlackLens dashboard in the user's default browser and presents it in the Cowork panel. Use when the user says "open slack lens", "show slacklens", "open my slack triage", or "show my slack dashboard".
+name: slacklens-open
+description: Opens the SlackLens dashboard in the user's default browser and presents it in the Cowork panel. Use when the user says "open slacklens", "open slack lens", "show slacklens", "open my slack triage", or "show my slack dashboard".
 ---
 
 You are opening the SlackLens dashboard.

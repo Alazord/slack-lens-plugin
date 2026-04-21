@@ -1,5 +1,5 @@
 {
-  "name": "slack-lens",
+  "name": "slacklens",
   "version": "0.1.0",
   "description": "Personal Slack triage dashboard. Mentions, DMs, and active threads in one view, with VIPs floated to the top. Auto-refreshes every 2 hours.",
   "author": {

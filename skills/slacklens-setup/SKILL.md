@@ -1,6 +1,6 @@
 ---
-name: slack-lens-setup
-description: One-time setup for the SlackLens dashboard. Detects the connected Slack identity, asks who to prioritise, registers the auto-refresh schedule, and triggers the first refresh. Use when the user says "set up slack lens", "configure slacklens", "initialize slack lens", or it is the first time they have used the plugin.
+name: slacklens-setup
+description: One-time setup for the SlackLens dashboard. Detects the connected Slack identity, asks who to prioritise, registers the auto-refresh schedule, and triggers the first refresh. Use when the user says "set up slacklens", "set up slack lens", "configure slacklens", "initialize slacklens", or it is the first time they have used the plugin.
 ---
 
 You are running the one-time setup for SlackLens for this user.
@@ -93,15 +93,15 @@ plugin_root = os.environ.get("PLUGIN_ROOT", "").strip()
 if not plugin_root:
     raise SystemExit(
         "ERROR: $CLAUDE_PLUGIN_ROOT is not set. "
-        "The plugin runtime should populate this — make sure slack-lens is "
+        "The plugin runtime should populate this — make sure slacklens is "
         "installed as a Cowork plugin (not cloned and run manually)."
     )
-src = os.path.join(plugin_root, "skills", "slack-lens-refresh",
+src = os.path.join(plugin_root, "skills", "slacklens-refresh",
                    "references", "dashboard.template.html")
 if not os.path.isfile(src):
     raise SystemExit(
         f"ERROR: dashboard template not found at {src}. "
-        "The plugin install may be incomplete — try reinstalling slack-lens."
+        "The plugin install may be incomplete — try reinstalling slacklens."
     )
 dst = os.path.join(home_dir, "dashboard.html")
 shutil.copy(src, dst)
@@ -133,23 +133,23 @@ Call the `create_scheduled_task` tool from the scheduled-tasks MCP
 (full tool name: `mcp__scheduled-tasks__create_scheduled_task`) with these
 exact fields:
 
-- `taskId`: `slack-lens-refresh`   (kebab-case id; required)
+- `taskId`: `slacklens-refresh`   (kebab-case id; required)
 - `description`: `Refresh the SlackLens dashboard cache every 2 hours.`   (required)
 - `cronExpression`: `0 */2 * * *`   (every 2 hours, on the hour, in local time)
-- `prompt`: `Run the slack-lens-refresh skill from the slack-lens plugin to refresh the SlackLens dashboard cache.`
+- `prompt`: `Run the slacklens-refresh skill from the slacklens plugin to refresh the SlackLens dashboard cache.`
 
 If a task with that id already exists, the MCP will error — catch it and
 continue; don't fail setup over a re-registration.
 
 ## Step 6 — Trigger the first refresh
 
-Run the `slack-lens-refresh` skill now (in this same session) so the user
+Run the `slacklens-refresh` skill now (in this same session) so the user
 sees data immediately. Wait for it to finish. If it fails, surface the
 error clearly — do not pretend setup succeeded.
 
 ## Step 7 — Open the dashboard
 
-Run the `slack-lens-open` skill so the dashboard opens in the user's
+Run the `slacklens-open` skill so the dashboard opens in the user's
 browser AND is presented in Cowork.
 
 ## Step 8 — Confirm

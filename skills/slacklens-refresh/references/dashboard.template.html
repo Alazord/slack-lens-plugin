@@ -453,7 +453,7 @@ footer {
           <div class="tasklist-sched"><span class="tid">slack-dashboard-refresh</span><span class="nx">manual</span></div>
         </div>
         <div class="instructions" style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">
-          Refreshed by the <b>slack-lens-refresh</b> skill (every 2 hours, or on demand). Click <b>Reload cache</b> to pull the latest on-disk cache.
+          Refreshed by the <b>slacklens-refresh</b> skill (every 2 hours, or on demand). Click <b>Reload cache</b> to pull the latest on-disk cache.
           Run <code>slack-dashboard-refresh</code> to fetch fresh Slack data.
           Status, notes and snoozes are saved locally in your browser.
         </div>
@@ -478,7 +478,7 @@ const LS_KEY = 'slackTriageOverrides.v1';
 const STATUSES = ['AWAITING YOUR REPLY','BACKLOG','IN PROGRESS','WAITING','DISCUSSION','DONE'];
 const ME_ID = '';
 const ME_NAME = '';
-const VIP_IDS = [];  // VIPs (filled by slack-lens-setup)
+const VIP_IDS = [];  // VIPs (filled by slacklens-setup)
 const VIP_NAMES = [];
 
 let raw = null;       // parsed cache JSON
@@ -946,7 +946,7 @@ function setNotice(html, kind) {
 // ---------- Wire up ----------
 document.getElementById('btnRefresh').addEventListener('click', () => {
   // Plugin variant: there is no local server. The cache lives in
-  // ~/.slacklens/dashboard.html and is rewritten by the slack-lens-refresh
+  // ~/.slacklens/dashboard.html and is rewritten by the slacklens-refresh
   // skill (run automatically every 2 hours, or on demand from Cowork).
   // The button reloads the page so any fresh cache on disk is picked up,
   // and reminds the user how to force a refresh.

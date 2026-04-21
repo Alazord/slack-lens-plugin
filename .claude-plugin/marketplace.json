@@ -1,13 +1,16 @@
 {
-  "schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "Slack Lens",
-  "owner": "Alazord",
-  "description": "Personal Slack triage dashboard for teams.",
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "alazord",
+  "description": "Alazord's Cowork plugins — Slack triage and other workflow tools.",
+  "owner": {
+    "name": "Shailendra Singh",
+    "email": "shailendra.singh@unifyapps.com"
+  },
   "plugins": [
     {
-      "name": "slack-lens",
+      "name": "slacklens",
       "source": ".",
-      "description": "Pulls your DMs, mentions, and VIP threads into a single HTML view, refreshed every 2 hours. Three skills: set up, refresh, open."
+      "description": "Personal Slack triage dashboard. Mentions, DMs, and active threads in one view, with VIPs floated to the top. Auto-refreshes every 2 hours."
     }
   ]
 }

@@ -2,43 +2,59 @@
 
 Personal Slack triage dashboard. Mentions, DMs, and active threads in one view, with VIPs floated to the top. Auto-refreshes every 2 hours.
 
-## Setup (30 seconds)
+## Install (60 seconds)
 
 **1. Make sure you have:**
-- Cowork (Claude desktop app)
+- Cowork (the Claude desktop app), or Claude Code CLI
 - Slack connected: Cowork → Settings → Connectors → Slack
 
-**2. Install the plugin** by accepting the `.plugin` file (your team channel will have a link, or DM @Shailendra).
+**2. Add the marketplace**, then install the plugin — run these two commands in a Cowork/Claude Code chat, one after the other:
 
-**3. In Cowork, send:** `set up slack lens`
+```
+/plugin marketplace add Alazord/slack-lens-plugin
+/plugin install slacklens@alazord
+```
 
-The setup skill will detect you, ask who to prioritise (your manager, CEO — or skip), schedule the auto-refresh, and open the dashboard. Takes about 90 seconds.
+**3. Run setup:** in the same chat, send `set up slacklens`.
+
+The setup skill detects you, asks who to prioritise (your manager, CEO — or skip), registers the 2-hour auto-refresh, and opens the dashboard. Takes about 90 seconds end-to-end.
 
 ## Day to day
 
-- **Open the dashboard** → say `open slack lens` in Cowork
-- **Force a refresh** → say `refresh slack lens` in Cowork
-- **Auto-refresh** → runs every 2 hours on its own (registered as a Cowork scheduled task)
-- **Change priority people** → re-run `set up slack lens`
+- **Open the dashboard** → say `open slacklens` in chat
+- **Force a refresh** → say `refresh slacklens` in chat
+- **Auto-refresh** → runs every 2 hours on its own (registered as a scheduled task)
+- **Change priority people** → re-run `set up slacklens`
 
 The dashboard lives at `~/.slacklens/dashboard.html` and is also presented in the Cowork side panel after every refresh.
+
+> Both `slacklens` and `slack lens` (with a space) are recognised triggers — either works.
 
 ## How it works
 
 Everything is a Cowork skill — there's no local server, no port, no launchd job. The plugin ships three skills:
 
-- `slack-lens-setup` — one-time identity + VIP setup
-- `slack-lens-refresh` — pulls the last 48h of mentions/DMs from Slack via the Slack MCP, writes the cache, rebuilds the dashboard HTML
-- `slack-lens-open` — opens the dashboard in your browser and presents it in Cowork
+- `slacklens-setup` — one-time identity + VIP setup
+- `slacklens-refresh` — pulls the last 48h of mentions/DMs from Slack via the Slack MCP, writes the cache, rebuilds the dashboard HTML
+- `slacklens-open` — opens the dashboard in your browser and presents it in Cowork
 
 State lives in `~/.slacklens/`: `config.json`, `cache.json`, `dashboard.html`. Wipe that folder to factory-reset.
+
+## Updating
+
+To pick up new versions, either:
+
+- Restart Cowork (marketplaces re-sync on launch), **or**
+- Run `/plugin marketplace update alazord` then `/plugin install slacklens@alazord` again.
+
+The `version` field in `.claude-plugin/plugin.json` bumps on every release.
 
 ## When things break
 
 | Symptom | Fix |
 |---|---|
 | Setup says "Slack MCP not connected" | Cowork → Settings → Connectors → Slack → Connect |
-| `set up slack lens` doesn't trigger any skill | Make sure the plugin is installed and enabled in Cowork → Settings → Plugins |
-| Dashboard shows old data | Say `refresh slack lens` in Cowork |
-| Dashboard is blank or "No cache loaded" | Say `refresh slack lens`. If still blank, wipe `~/.slacklens/` and re-run setup |
-
+| `set up slacklens` doesn't trigger any skill | Check the plugin is enabled: `/plugin list` (CLI) or Settings → Plugins (Cowork) |
+| Dashboard shows old data | Say `refresh slacklens` |
+| Dashboard is blank or "No cache loaded" | Say `refresh slacklens`. If still blank, `rm -rf ~/.slacklens/` and re-run setup |
+| "Marketplace file not found" when adding marketplace | Your clone is stale — `rm -rf ~/.claude/plugins/marketplaces/Alazord-slack-lens-plugin/` and retry |
