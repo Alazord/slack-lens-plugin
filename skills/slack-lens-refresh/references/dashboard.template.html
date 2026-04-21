@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slack Triage — Live</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ff: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --white:#fff; --bg:#f7f7f5; --line:#e8e8e4; --line2:#d1d1cb;
+  --muted:#b0b0a8; --sub:#737370; --body:#3a3a38; --head:#111110;
+  --amber:#b45309; --red:#c0392b; --orange:#c05621; --blue:#1a6fa8;
+  --purple:#6b33c6; --green:#1a7a45; --accent:#D97757;
+}
+
+body { font-family: var(--ff); background: var(--bg); color: var(--body); font-size:13px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+
+/* ── HEADER ── */
+.header {
+  background: var(--white); border-bottom: 1px solid var(--line);
+  padding: 0 28px; display:flex; align-items:center; height:56px; gap:18px;
+  position:sticky; top:0; z-index:10;
+}
+.logo { font-size:15px; font-weight:600; color:var(--head); letter-spacing:-0.02em; }
+.logo .dot { color: var(--accent); }
+.logo span.sub { color: var(--muted); font-weight:400; margin-left:6px; font-size:12px; }
+.header-ts { font-size:12px; color:var(--muted); flex:1; }
+.header-ts b { color: var(--body); font-weight: 500; }
+.btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:6px 12px; border:1px solid var(--line2); border-radius:7px;
+  background:var(--white); color:var(--sub); font-size:12px; font-weight:500;
+  font-family:var(--ff); cursor:pointer; transition:all .1s;
+}
+.btn:hover { border-color: var(--body); color: var(--head); background: var(--bg); }
+.btn.primary { background: var(--head); color:#fff; border-color: var(--head); }
+.btn.primary:hover { background:#000; color:#fff; }
+.btn svg { width:12px; height:12px; }
+
+/* ── STAT TABS ── */
+.stat-tabs {
+  display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden;
+}
+.stab {
+  display:flex; align-items:center; gap:6px;
+  padding:5px 12px; font-size:11.5px; color:var(--muted);
+  background:transparent; border:none; border-right:1px solid var(--line);
+  font-family:var(--ff); cursor:pointer; white-space:nowrap;
+}
+.stab:last-child { border-right:none; }
+.stab:hover { background:var(--bg); color:var(--body); }
+.stab.active { background:var(--head); color:#fff; }
+.stab .n { font-size:14px; font-weight:700; font-variant-numeric:tabular-nums; }
+
+/* ── FILTER BAR ── */
+.filters {
+  background: var(--white); border-bottom:1px solid var(--line);
+  padding: 8px 28px; display:flex; align-items:center; gap:8px;
+  flex-wrap:wrap;
+}
+.pill {
+  padding:4px 11px; border-radius:6px; font-size:12px; color:var(--sub);
+  background:transparent; border:none; font-family:var(--ff); cursor:pointer;
+  display:inline-flex; align-items:center; gap:6px;
+}
+.pill:hover { background: var(--bg); color:var(--body); }
+.pill.active { background: var(--head); color:#fff; }
+.pill .dot { width:6px; height:6px; border-radius:50%; }
+.pill-divider { width:1px; height:16px; background:var(--line); }
+.search {
+  flex:1; min-width:180px; padding:6px 10px;
+  border:1px solid var(--line); border-radius:7px;
+  font-family: var(--ff); font-size:12px; color:var(--body);
+  background:var(--white);
+}
+.search:focus { outline:none; border-color:var(--sub); }
+
+/* ── BANNER ── */
+.notice {
+  margin:12px 28px 0; padding:10px 14px; border-radius:7px;
+  font-size:12px; display:none;
+}
+.notice.show { display:block; }
+.notice.info { background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; }
+.notice.warn { background:#fef4e6; border:1px solid #fcd8a4; color:#9a4d06; }
+.notice.err  { background:#fef2f1; border:1px solid #fecaca; color:#991b1b; }
+
+/* ── BODY ── */
+.body {
+  display:grid; grid-template-columns: 1fr 1fr;
+  gap:0 24px; padding:20px 28px 40px; align-items:start;
+}
+@media (max-width:960px){ .body { grid-template-columns: 1fr; gap:28px; } }
+.section { min-width:0; }
+.section + .section { padding-left:32px; }
+@media (max-width:960px){ .section + .section { padding-left:0; } }
+
+.section-head {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:12px; padding-right:4px;
+}
+.section-title {
+  font-size:11px; font-weight:600; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--muted);
+}
+.section-count { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+.group {
+  margin-bottom:18px;
+}
+.group-items {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+.group-items[data-multi="1"] {
+  grid-template-columns: 1fr 1fr;
+}
+.group-items .item {
+  margin-bottom: 0;
+}
+.group-head {
+  font-size:11px; font-weight:600; color:var(--sub);
+  padding:2px 4px 8px; display:flex; justify-content:space-between;
+}
+.group-head .count { color: var(--muted); font-weight:400; }
+
+/* ── ITEM ── */
+.item {
+  background:var(--white); border:1px solid var(--line); border-radius:8px;
+  padding:12px 14px 12px 18px; position:relative; overflow:hidden; margin-bottom:6px;
+  transition: border-color .12s, box-shadow .12s;
+}
+.item:hover { border-color: var(--line2); box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+.item.hidden { display:none; }
+.item.snoozed { opacity:.45; }
+.item::before {
+  content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+}
+.item[data-status="AWAITING YOUR REPLY"]::before { background: var(--amber); }
+.item[data-status="BACKLOG"]::before             { background: var(--red); }
+.item[data-status="IN PROGRESS"]::before         { background: var(--orange); }
+.item[data-status="WAITING"]::before             { background: var(--blue); }
+.item[data-status="DISCUSSION"]::before          { background: var(--purple); }
+.item[data-status="DONE"]::before                { background: var(--green); }
+
+.item-row1 { display:flex; align-items:flex-start; gap:6px; margin-bottom:5px; flex-wrap:wrap; }
+.item-name {
+  font-size:13px; font-weight:600; color:var(--head); flex:1; min-width:0;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  line-height:1.4;
+}
+.item-name .ch {
+  font-size:11px; color:var(--sub); margin-right:5px; font-weight:500;
+}
+.item-row1-right {
+  display:flex; align-items:center; gap:6px; flex-shrink:0;
+}
+.item-time { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+.status-select {
+  appearance:none; border:1px solid var(--line); background:var(--white);
+  border-radius:5px; padding:3px 20px 3px 8px; font-size:10.5px;
+  color:var(--sub); cursor:pointer; font-family:var(--ff);
+  font-weight:600; letter-spacing:.04em; max-width:160px; min-width:80px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'><path d='M1 2.5l3 3 3-3' stroke='%23b0b0a8' fill='none' stroke-width='1.4' stroke-linecap='round'/></svg>");
+  background-repeat: no-repeat; background-position: right 6px center;
+}
+.status-select[data-val="AWAITING YOUR REPLY"] { color:var(--amber); border-color:#fde4c2; background-color:#fefce8; }
+.status-select[data-val="BACKLOG"]             { color:var(--red);   border-color:#fcd0cd; background-color:#fef2f1; }
+.status-select[data-val="IN PROGRESS"]         { color:var(--orange);border-color:#fcd7c2; background-color:#fff4ee; }
+.status-select[data-val="WAITING"]             { color:var(--blue);  border-color:#cfe1f4; background-color:#eff6ff; }
+.status-select[data-val="DISCUSSION"]          { color:var(--purple);border-color:#dccdf8; background-color:#f5f0ff; }
+.status-select[data-val="DONE"]                { color:var(--green); border-color:#bfe9cf; background-color:#edfbf3; }
+
+.item-meta {
+  font-size:11.5px; color:var(--sub); line-height:1.5;
+  margin-bottom:6px;
+}
+.item-meta b { color: var(--body); font-weight:600; }
+.item-preview {
+  font-size:12px; color:var(--sub); line-height:1.45;
+  background:var(--bg); border-radius:6px; padding:8px 10px;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.item-preview .me { color: var(--head); font-weight:500; }
+
+.item-actions {
+  display:flex; align-items:center; gap:4px; margin-top:8px; flex-wrap:wrap;
+}
+.item-actions a, .item-actions button {
+  font-size:11px; color:var(--sub); text-decoration:none;
+  padding:3px 8px; border-radius:5px;
+  border:1px solid transparent; background:transparent;
+  font-family:var(--ff); cursor:pointer;
+}
+.item-actions a:hover, .item-actions button:hover {
+  color:var(--head); background:var(--bg); border-color:var(--line);
+}
+.note-input {
+  display:none;
+  width:100%; margin-top:6px; padding:6px 8px;
+  border:1px solid var(--line); border-radius:6px;
+  font-size:12px; font-family:var(--ff); color:var(--body);
+  resize:vertical; min-height:36px;
+}
+.note-input.show { display:block; }
+.note-display {
+  font-size:11.5px; color:var(--accent); margin-top:6px;
+  padding:5px 8px; background:#fff8f3; border-radius:5px;
+  border-left:2px solid var(--accent);
+}
+
+.empty {
+  padding:40px 16px; text-align:center; color:var(--muted);
+  font-size:12px; border:1px dashed var(--line); border-radius:8px;
+}
+
+/* ── SIDEBAR PANELS ── */
+.panel {
+  background:var(--white); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; margin-bottom:14px;
+}
+.panel h3 {
+  font-size:11px; font-weight:600; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--muted); margin-bottom:10px;
+}
+.kv { display:flex; justify-content:space-between; padding:4px 0; font-size:12px; }
+.kv + .kv { border-top:1px dashed var(--line); }
+.kv span:first-child { color: var(--sub); }
+.kv span:last-child  { color: var(--head); font-weight:500; font-variant-numeric:tabular-nums; }
+.tasklist-sched {
+  font-size:11.5px; padding:6px 0; display:flex; justify-content:space-between;
+  border-top:1px dashed var(--line);
+}
+.tasklist-sched:first-child { border-top:none; }
+.tasklist-sched .tid { color: var(--head); font-weight:500; }
+.tasklist-sched .nx  { color: var(--sub); font-variant-numeric:tabular-nums; }
+
+.instructions {
+  font-size:11.5px; color:var(--sub); line-height:1.55;
+}
+.instructions code {
+  background:var(--bg); padding:1px 5px; border-radius:4px;
+  font-size:11px; color:var(--head);
+}
+
+footer {
+  text-align:center; padding:24px; font-size:11px; color:var(--muted);
+}
+
+/* ── SIDE PANEL ── */
+.side-panel-overlay {
+  display:none; position:fixed; inset:0; z-index:100;
+}
+.side-panel-overlay.open { display:block; }
+.side-panel-backdrop {
+  position:absolute; inset:0; background:rgba(0,0,0,.18);
+}
+.side-panel {
+  position:absolute; top:0; right:0; bottom:0; width:320px;
+  background:var(--white); border-left:1px solid var(--line);
+  display:flex; flex-direction:column; box-shadow:-4px 0 24px rgba(0,0,0,.08);
+  transform:translateX(100%); transition:transform .2s ease;
+}
+.side-panel-overlay.open .side-panel { transform:translateX(0); }
+
+.side-panel-head {
+  padding:16px 18px 12px; border-bottom:1px solid var(--line);
+  display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+}
+.side-panel-title { font-size:13px; font-weight:600; color:var(--head); line-height:1.4; }
+.side-panel-sub { font-size:11.5px; color:var(--muted); margin-top:2px; }
+.side-panel-close {
+  background:none; border:none; cursor:pointer; color:var(--muted);
+  font-size:16px; line-height:1; padding:2px 4px; flex-shrink:0;
+}
+.side-panel-close:hover { color:var(--head); }
+
+.side-panel-body { padding:16px 18px; flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:16px; }
+
+.addon-section { display:flex; flex-direction:column; gap:6px; }
+.addon-label {
+  font-size:10.5px; font-weight:700; letter-spacing:.07em;
+  text-transform:uppercase; color:var(--muted);
+}
+
+/* Note textarea */
+.addon-note {
+  width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px;
+  font-size:12px; font-family:var(--ff); color:var(--body);
+  resize:vertical; min-height:72px; background:var(--bg);
+}
+.addon-note:focus { outline:none; border-color:var(--sub); background:var(--white); }
+
+/* Status select in panel */
+.addon-status {
+  appearance:none; width:100%; border:1px solid var(--line); background:var(--white);
+  border-radius:6px; padding:7px 28px 7px 10px; font-size:12px;
+  color:var(--sub); cursor:pointer; font-family:var(--ff); font-weight:600;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'><path d='M1 2.5l3 3 3-3' stroke='%23b0b0a8' fill='none' stroke-width='1.4' stroke-linecap='round'/></svg>");
+  background-repeat:no-repeat; background-position:right 8px center;
+}
+
+.addon-btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  padding:8px 12px; border-radius:6px; font-size:12px; font-weight:500;
+  font-family:var(--ff); cursor:pointer; border:1px solid var(--line);
+  background:var(--white); color:var(--sub); width:100%; transition:all .1s;
+}
+.addon-btn:hover { border-color:var(--line2); color:var(--head); background:var(--bg); }
+.addon-btn.danger { color:var(--red); border-color:#fcd0cd; background:#fff8f8; }
+.addon-btn.danger:hover { background:#fef2f1; }
+.addon-btn.snooze-active { color:var(--blue); border-color:var(--blue); background:var(--blue-bg); }
+
+/* ── VIP / LEADERSHIP GROUP ── */
+.group-head.vip {
+  color: var(--red);
+  font-size: 12px;
+  letter-spacing: .04em;
+  padding: 4px 6px 10px;
+  border-bottom: 2px solid #fcd0cd;
+  margin-bottom: 10px;
+}
+.group.vip {
+  background: #fff8f8;
+  border: 1px solid #fcd0cd;
+  border-radius: 10px;
+  padding: 10px 10px 4px;
+  margin-bottom: 20px;
+}
+
+/* ── SIDE PANEL ── */
+.side-panel-overlay {
+  display:none; position:fixed; inset:0; z-index:100;
+}
+.side-panel-overlay.open { display:block; }
+.side-panel-backdrop {
+  position:absolute; inset:0; background:rgba(0,0,0,.18);
+}
+.side-panel {
+  position:absolute; top:0; right:0; bottom:0; width:320px;
+  background:var(--white); border-left:1px solid var(--line);
+  display:flex; flex-direction:column; box-shadow:-4px 0 24px rgba(0,0,0,.08);
+  transform:translateX(100%); transition:transform .2s ease;
+}
+.side-panel-overlay.open .side-panel { transform:translateX(0); }
+.side-panel-head {
+  padding:16px 18px 12px; border-bottom:1px solid var(--line);
+  display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+}
+.side-panel-title { font-size:13px; font-weight:600; color:var(--head); line-height:1.4; }
+.side-panel-sub { font-size:11.5px; color:var(--muted); margin-top:2px; }
+.side-panel-close {
+  background:none; border:none; cursor:pointer; color:var(--muted);
+  font-size:16px; line-height:1; padding:2px 4px; flex-shrink:0;
+}
+.side-panel-close:hover { color:var(--head); }
+.side-panel-body { padding:16px 18px; flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:16px; }
+.addon-section { display:flex; flex-direction:column; gap:6px; }
+.addon-label {
+  font-size:10.5px; font-weight:700; letter-spacing:.07em;
+  text-transform:uppercase; color:var(--muted);
+}
+.addon-note {
+  width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px;
+  font-size:12px; font-family:var(--ff); color:var(--body);
+  resize:vertical; min-height:72px; background:var(--bg);
+}
+.addon-note:focus { outline:none; border-color:var(--sub); background:var(--white); }
+.addon-status {
+  appearance:none; width:100%; border:1px solid var(--line); background:var(--white);
+  border-radius:6px; padding:7px 28px 7px 10px; font-size:12px;
+  color:var(--sub); cursor:pointer; font-family:var(--ff); font-weight:600;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'><path d='M1 2.5l3 3 3-3' stroke='%23b0b0a8' fill='none' stroke-width='1.4' stroke-linecap='round'/></svg>");
+  background-repeat:no-repeat; background-position:right 8px center;
+}
+.addon-btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  padding:8px 12px; border-radius:6px; font-size:12px; font-weight:500;
+  font-family:var(--ff); cursor:pointer; border:1px solid var(--line);
+  background:var(--white); color:var(--sub); width:100%; transition:all .1s;
+}
+.addon-btn:hover { border-color:var(--line2); color:var(--head); background:var(--bg); }
+.addon-btn.danger { color:var(--red); border-color:#fcd0cd; background:#fff8f8; }
+.addon-btn.danger:hover { background:#fef2f1; }
+.addon-btn.snooze-active { color:var(--blue); border-color:#cfe1f4; background:#eff6ff; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">Slack Triage<span class="dot">.</span><span class="sub">live</span></div>
+  <div class="header-ts" id="freshness">Loading cache…</div>
+  <div class="stat-tabs" id="statTabs"></div>
+  <button class="btn" id="btnRefresh" title="Fetch fresh Slack data and reload dashboard">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 8a6 6 0 0 1 10.5-4M14 8a6 6 0 0 1-10.5 4"/><path d="M13 2v3h-3M3 14v-3h3"/></svg>
+    Reload cache
+  </button>
+</div>
+
+<div class="filters">
+  <button class="pill active" data-scope="all">All</button>
+  <button class="pill" data-scope="mentions">Mentions of me</button>
+  <button class="pill" data-scope="awaiting">Needs my reply</button>
+  <button class="pill" data-scope="dm">DMs</button>
+  <button class="pill" data-scope="channels">Channels</button>
+  <span class="pill-divider"></span>
+  <button class="pill" data-status="BACKLOG"><span class="dot" style="background:var(--red)"></span>Backlog</button>
+  <button class="pill" data-status="IN PROGRESS"><span class="dot" style="background:var(--orange)"></span>In progress</button>
+  <button class="pill" data-status="WAITING"><span class="dot" style="background:var(--blue)"></span>Waiting</button>
+  <button class="pill" data-status="DONE"><span class="dot" style="background:var(--green)"></span>Done</button>
+  <span class="pill-divider"></span>
+  <input class="search" id="search" placeholder="Search channel, person, text…"/>
+  <button class="pill" id="showSnoozed">Show snoozed</button>
+</div>
+
+<div class="notice info" id="notice"></div>
+
+<div class="body">
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title">Leadership &amp; Groups</div>
+      <div class="section-count" id="replyCount">—</div>
+    </div>
+    <div id="replyList"></div>
+  </div>
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title">DMs</div>
+      <div class="section-count" id="otherCount">—</div>
+    </div>
+    <div id="otherList"></div>
+
+    <details class="panel" style="margin-top:18px;">
+      <summary style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;padding:2px 0;">
+        <h3 style="margin:0;">Cache &amp; schedule</h3>
+        <span style="font-size:10px;color:var(--muted);">▾ expand</span>
+      </summary>
+      <div style="margin-top:10px;">
+        <div class="kv"><span>Last refresh</span><span id="cRefresh">—</span></div>
+        <div class="kv"><span>Threads tracked</span><span id="cThreads">—</span></div>
+        <div class="kv"><span>Mentions (last 48h)</span><span id="cMentions">—</span></div>
+        <div class="kv"><span>Your sent DMs</span><span id="cDms">—</span></div>
+        <div class="kv"><span>Your channel msgs</span><span id="cChan">—</span></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">
+          <div class="tasklist-sched"><span class="tid">slack-cache-refresh</span><span class="nx">10:50 &amp; 19:50 daily</span></div>
+          <div class="tasklist-sched"><span class="tid">slack-reply-queue-morning</span><span class="nx">11:00 daily</span></div>
+          <div class="tasklist-sched"><span class="tid">slack-reply-queue-evening</span><span class="nx">20:00 daily</span></div>
+          <div class="tasklist-sched"><span class="tid">slack-dashboard-refresh</span><span class="nx">manual</span></div>
+        </div>
+        <div class="instructions" style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">
+          Refreshed by the <b>slack-lens-refresh</b> skill (every 2 hours, or on demand). Click <b>Reload cache</b> to pull the latest on-disk cache.
+          Run <code>slack-dashboard-refresh</code> to fetch fresh Slack data.
+          Status, notes and snoozes are saved locally in your browser.
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+
+<footer>
+  <span id="footerNote">Cowork live artifact · data: ./slack-triage-cache.json</span>
+</footer>
+
+<script>
+// ---------- Inlined cache (works under file://) ----------
+window.__SLACK_CACHE__ = {
+  "refreshed_at": null,
+  "search_results": { "mentions": [], "dms_received": [], "outgoing_dms": [] },
+  "threads": {}
+};
+// ---------- State ----------
+const LS_KEY = 'slackTriageOverrides.v1';
+const STATUSES = ['AWAITING YOUR REPLY','BACKLOG','IN PROGRESS','WAITING','DISCUSSION','DONE'];
+const ME_ID = '';
+const ME_NAME = '';
+const VIP_IDS = [];  // VIPs (filled by slack-lens-setup)
+const VIP_NAMES = [];
+
+let raw = null;       // parsed cache JSON
+let items = [];       // normalized list
+let filter = { scope:'all', status:null, query:'', showSnoozed:false };
+let overrides = loadOverrides();
+
+function loadOverrides() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); }
+  catch { return {}; }
+}
+function saveOverrides() {
+  localStorage.setItem(LS_KEY, JSON.stringify(overrides));
+}
+function overrideFor(key) {
+  if (!overrides[key]) overrides[key] = {};
+  return overrides[key];
+}
+
+// ---------- Loading ----------
+async function loadCache() {
+  setNotice('', null);
+  // 1) Try a live fetch (works when served over http://)
+  const url = './slack-triage-cache.json?t=' + Date.now();
+  try {
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    raw = await r.json();
+    normalize();
+    render();
+    setNotice('Loaded fresh cache from disk at ' + new Date().toLocaleTimeString() + '.', 'info');
+    setTimeout(() => setNotice('', null), 3500);
+    return;
+  } catch (e) {
+    // 2) Fall back to the cache embedded at file generation time.
+    if (window.__SLACK_CACHE__) {
+      raw = window.__SLACK_CACHE__;
+      normalize();
+      render();
+      // embedded cache — no banner
+      return;
+    }
+    setNotice('No cache data available (' + e.message + ').', 'err');
+    document.getElementById('freshness').innerHTML = 'No cache loaded.';
+  }
+}
+
+// Normalize mentions + threads into a single item list
+function normalize() {
+  items = [];
+  const seen = new Set();
+
+  // 1) Threads (richer — have message history)
+  const threads = raw.threads || {};
+  Object.entries(threads).forEach(([threadKey, t]) => {
+    if (!t || !t.channel_id) return;
+    const msgs = (t.messages || []).slice().sort((a,b) => (+a.ts||0) - (+b.ts||0));
+    const last = msgs[msgs.length - 1];
+    const firstNonMe = msgs.find(m => !isMe(m.from));
+    const permalink = deriveThreadPermalink(t, last || firstNonMe);
+    const key = permalink || (t.channel_id + '/' + (t.thread_ts || 'top'));
+    if (seen.has(key)) return; seen.add(key);
+
+    const lastFrom = last ? cleanName(last.from) : '';
+    const lastIsMe = last ? isMe(last.from) : false;
+    const lastText = last ? last.text : '';
+    const lastTime = last ? last.time : '';
+
+    const derived = inferStatus({
+      channel_name: t.channel_name,
+      lastIsMe, lastText, msgs
+    });
+
+    items.push({
+      key,
+      kind: kindFromChannel(t.channel_name, t.channel_id),
+      channel_id: t.channel_id,
+      channel_name: t.channel_name,
+      channel_display: prettyChannel(t.channel_name, t.channel_id),
+      permalink,
+      last_from: lastFrom,
+      last_is_me: lastIsMe,
+      last_text: lastText,
+      last_time: lastTime,
+      msg_count: msgs.length,
+      participants: Array.from(new Set(msgs.map(m => cleanName(m.from)))).filter(Boolean),
+      my_last_text: (msgs.slice().reverse().find(m => isMe(m.from)) || {}).text || '',
+      status: derived.status,
+      needs_reply: derived.needs_reply,
+      project: projectFromChannel(t.channel_name),
+      source: 'thread',
+    });
+  });
+
+  // 2) Mentions (messages addressed to you) — add as items if not already covered by a thread
+  const mentionsQueries = (raw.search_results && raw.search_results.mentions) || [];
+  mentionsQueries.forEach(q => (q.results || []).forEach(m => {
+    if (!m.permalink) return;
+    const threadURL = m.permalink.split('?')[0];
+    // If we already have a thread whose key matches this channel, skip duplicating
+    const existing = items.find(it => it.channel_id === m.channel_id);
+    if (existing) {
+      // attach mention text as hint if newer
+      if (!existing.mention_preview) existing.mention_preview = m.text;
+      return;
+    }
+    if (seen.has(m.permalink)) return; seen.add(m.permalink);
+    items.push({
+      key: m.permalink,
+      kind: kindFromChannel(m.channel_name, m.channel_id),
+      channel_id: m.channel_id,
+      channel_name: m.channel_name,
+      channel_display: prettyChannel(m.channel_name, m.channel_id),
+      permalink: m.permalink,
+      last_from: cleanName(m.from_user),
+      last_is_me: isMe(m.from_user),
+      last_text: m.text,
+      last_time: m.time,
+      msg_count: 1,
+      participants: [cleanName(m.from_user)].filter(Boolean),
+      my_last_text: '',
+      status: 'AWAITING YOUR REPLY',
+      needs_reply: !isMe(m.from_user),
+      project: projectFromChannel(m.channel_name),
+      source: 'mention',
+    });
+  }));
+
+  // Sort: needs-reply first, then by time desc
+  items.sort((a,b) => {
+    if (a.needs_reply !== b.needs_reply) return a.needs_reply ? -1 : 1;
+    return (b.last_time || '').localeCompare(a.last_time || '');
+  });
+}
+
+function isMe(s) {
+  if (!s) return false;
+  return (ME_ID && s.includes(ME_ID)) || (ME_NAME && s.includes(ME_NAME));
+}
+function isVIP(s) {
+  if (!s) return false;
+  return VIP_IDS.some(id => s.includes(id)) || VIP_NAMES.some(n => s.includes(n));
+}
+function threadHasVIP(it) {
+  // Check last_from, participants, channel_display for any VIP
+  if (isVIP(it.last_from)) return true;
+  if (it.participants && it.participants.some(p => isVIP(p))) return true;
+  if (isVIP(it.channel_display)) return true;
+  return false;
+}
+function cleanName(s) {
+  if (!s) return '';
+  return s.replace(/\s*\([UC][0-9A-Z]+\)\s*$/,'').trim();
+}
+function kindFromChannel(name, id) {
+  const n = (name||'').toLowerCase();
+  if (n.startsWith('dm (') || (id||'').startsWith('D')) return 'dm';
+  if (n.startsWith('group dm')) return 'dm';
+  return 'channel';
+}
+function prettyChannel(name, id) {
+  if (!name) return id || '?';
+  if (name.toLowerCase().startsWith('dm (')) {
+    // e.g. "DM (You, Other)" -> "@Other"
+    const m = name.match(/\((.+)\)/);
+    if (m) {
+      const parts = m[1].split(',').map(s => s.trim()).filter(s => !isMe(s));
+      return '@' + (parts[0] || 'DM');
+    }
+  }
+  if (name.toLowerCase().startsWith('group dm')) {
+    const m = name.match(/\((.+)\)/);
+    if (m) {
+      const parts = m[1].split(',').map(s => s.trim()).filter(s => !isMe(s));
+      return 'Group · ' + parts.slice(0,2).join(', ') + (parts.length>2?'…':'');
+    }
+    return 'Group DM';
+  }
+  return '#' + name.replace(/^#/,'');
+}
+function projectFromChannel(name) {
+  if (!name) return 'Other';
+  const n = name.toLowerCase();
+  if (n.includes('keka')) return 'Keka';
+  if (n.includes('copilot-automation')) return 'Copilot Automation';
+  if (n.includes('docebo')) return 'Docebo';
+  if (n.includes('vodafone')) return 'Vodafone';
+  if (n.includes('amn')) return 'AMN';
+  if (n.includes('psg')) return 'PSG';
+  if (n.includes('dda') || n.includes('govgpt')) return 'DDA GovGPT';
+  if (n.includes('boat')) return 'Boat CDP';
+  if (n.includes('ai agent') || n.includes('ai-agent')) return 'AI Agent';
+  if (n.startsWith('dm ') || n.startsWith('group dm')) return 'DM';
+  return 'Other';
+}
+function deriveThreadPermalink(t, msg) {
+  if (msg && msg.permalink) return msg.permalink;
+  const ts = (t.thread_ts && t.thread_ts !== 'top_level') ? t.thread_ts : (msg ? msg.ts : '');
+  if (!ts) return `https://unifyapps.slack.com/archives/${t.channel_id}`;
+  return `https://unifyapps.slack.com/archives/${t.channel_id}/p${ts.replace('.','')}`;
+}
+function inferStatus({channel_name, lastIsMe, lastText, msgs}) {
+  // Heuristics — user's overrides (if any) win at render time.
+  const text = (lastText || '').toLowerCase();
+  if (/resolved|fixed|merged|done|thanks, done/.test(text)) return {status:'DONE', needs_reply:false};
+  if (lastIsMe) {
+    // I spoke last — waiting on someone else
+    return {status:'WAITING', needs_reply:false};
+  }
+  // Someone else spoke last — I likely owe a reply
+  if (/eta|breach|urgent|please|need to|blocker/.test(text)) return {status:'BACKLOG', needs_reply:true};
+  if (/check|verify|review|confirm|pr\s*#?\d/.test(text)) return {status:'AWAITING YOUR REPLY', needs_reply:true};
+  return {status:'AWAITING YOUR REPLY', needs_reply:true};
+}
+
+// ---------- Rendering ----------
+function render() {
+  // Freshness + counts
+  const refreshed = raw && raw.refreshed_at;
+  document.getElementById('freshness').innerHTML =
+    refreshed ? ('Cache: <b>' + fmtRelative(refreshed) + '</b> · ' + fmtHuman(refreshed)) : 'No cache loaded';
+  document.getElementById('cRefresh').textContent = refreshed ? fmtHuman(refreshed) : '—';
+  document.getElementById('cThreads').textContent = raw && raw.threads ? Object.keys(raw.threads).length : 0;
+  document.getElementById('cMentions').textContent = sumResults(raw, 'mentions');
+  document.getElementById('cDms').textContent = sumResults(raw, 'dms');
+  document.getElementById('cChan').textContent = sumResults(raw, 'channels');
+
+  // Stat tabs
+  const tabs = [
+    {id:'all', label:'All', n: items.length, cls:''},
+    {id:'awaiting', label:'Needs reply', n: items.filter(i => effectiveItem(i).needs_reply).length, cls:'s-amber'},
+    {id:'mentions', label:'Mentions', n: items.filter(i => i.source === 'mention' || i.mention_preview).length, cls:'s-blue'},
+    {id:'dm', label:'DMs', n: items.filter(i => i.kind === 'dm').length, cls:'s-purple'},
+    {id:'channels', label:'Channels', n: items.filter(i => i.kind === 'channel').length, cls:'s-orange'},
+  ];
+  const st = document.getElementById('statTabs');
+  st.innerHTML = '';
+  tabs.forEach(t => {
+    const b = document.createElement('button');
+    b.className = 'stab ' + t.cls + (filter.scope === t.id ? ' active' : '');
+    b.innerHTML = `<span class="n">${t.n}</span> ${t.label}`;
+    b.onclick = () => { filter.scope = t.id; syncFilterPills(); render(); };
+    st.appendChild(b);
+  });
+
+  // Items
+  const replyList = document.getElementById('replyList');
+  const otherList = document.getElementById('otherList');
+  replyList.innerHTML = '';
+  otherList.innerHTML = '';
+
+  const shown = items.filter(passFilter);
+
+  // Left col: channels + VIP threads + group DMs, sorted by last_time desc
+  const leftItems = shown.filter(i => {
+    if (i.kind === 'channel') return true;
+    if (threadHasVIP(i)) return true;
+    if ((i.channel_name||'').toLowerCase().startsWith('group dm')) return true;
+    return false;
+  }).sort((a,b) => b.last_time > a.last_time ? 1 : -1);
+
+  // Right col: 1:1 DMs only (not group dm, not VIP), sorted by last_time desc
+  const rightItems = shown.filter(i => {
+    if (i.kind !== 'dm') return false;
+    if (threadHasVIP(i)) return false;
+    if ((i.channel_name||'').toLowerCase().startsWith('group dm')) return false;
+    return true;
+  }).sort((a,b) => b.last_time > a.last_time ? 1 : -1);
+
+  renderGrouped(replyList, leftItems, 'project');
+  renderGrouped(otherList, rightItems, 'needs_reply');
+
+  document.getElementById('replyCount').textContent = leftItems.length + ' item' + (leftItems.length===1?'':'s');
+  document.getElementById('otherCount').textContent = rightItems.length + ' item' + (rightItems.length===1?'':'s');
+
+  if (!leftItems.length) replyList.innerHTML = '<div class="empty">No threads in Leadership &amp; Groups.</div>';
+  if (!rightItems.length) otherList.innerHTML = '<div class="empty">No DMs.</div>';
+}
+
+function renderGrouped(container, arr, groupBy) {
+  if (!arr.length) return;
+  const groups = {};
+  arr.forEach(it => {
+    let g;
+    if (groupBy === 'project') {
+      g = threadHasVIP(it) ? '🔴 Leadership' : it.project;
+    } else if (groupBy === 'needs_reply') {
+      g = effectiveItem(it).needs_reply ? 'Needs reply' : 'Waiting / Done';
+    } else {
+      g = effectiveItem(it).status;
+    }
+    groups[g] = groups[g] || [];
+    groups[g].push(it);
+  });
+  const order = groupBy === 'project'
+    ? ['🔴 Leadership','Keka','Copilot Automation','DDA GovGPT','Docebo','Vodafone','AMN','Boat CDP','PSG','AI Agent','DM','Other']
+    : groupBy === 'needs_reply'
+    ? ['Needs reply','Waiting / Done']
+    : STATUSES;
+  order.filter(g => groups[g]).forEach(g => {
+    const gdiv = document.createElement('div');
+    const isVIPGroup = g === '🔴 Leadership';
+    gdiv.className = 'group' + (isVIPGroup ? ' vip' : '');
+    gdiv.innerHTML = `<div class="group-head${isVIPGroup ? ' vip' : ''}">${escapeHtml(g)}<span class="count">${groups[g].length}</span></div>`;
+    const gi1 = document.createElement('div');
+    gi1.className = 'group-items';
+    if (groups[g].length >= 2) gi1.dataset.multi = '1';
+    groups[g].forEach(it => gi1.appendChild(renderItem(it)));
+    gdiv.appendChild(gi1);
+    container.appendChild(gdiv);
+  });
+  // Any remaining keys not in order
+  Object.keys(groups).filter(g => !order.includes(g)).forEach(g => {
+    const gdiv = document.createElement('div');
+    const isVIPGroup = g === '🔴 Leadership';
+    gdiv.className = 'group' + (isVIPGroup ? ' vip' : '');
+    gdiv.innerHTML = `<div class="group-head${isVIPGroup ? ' vip' : ''}">${escapeHtml(g)}<span class="count">${groups[g].length}</span></div>`;
+    const gi2 = document.createElement('div');
+    gi2.className = 'group-items';
+    groups[g].forEach(it => gi2.appendChild(renderItem(it)));
+    gdiv.appendChild(gi2);
+    container.appendChild(gdiv);
+  });
+}
+
+function renderItem(it) {
+  const ov = overrideFor(it.key);
+  const eff = effectiveItem(it);
+  const el = document.createElement('div');
+  el.className = 'item';
+  if (ov.snoozed) el.classList.add('snoozed');
+  el.dataset.status = eff.status;
+
+  const preview = (it.last_text || it.mention_preview || '').trim();
+  const previewHtml = preview
+    ? `<div class="item-preview"><b>${escapeHtml(it.last_from || '')}:</b> ${escapeHtml(preview)}</div>`
+    : '';
+
+  const metaBits = [];
+  if (it.msg_count > 1) metaBits.push(`${it.msg_count} msgs`);
+  if (it.participants && it.participants.length) {
+    const others = it.participants.filter(p => !isMe(p)).slice(0,3);
+    if (others.length) metaBits.push(others.join(', '));
+  }
+  if (it.my_last_text) metaBits.push(`you said: "${escapeHtml(snip(it.my_last_text, 50))}"`);
+
+  el.innerHTML = `
+    <div class="item-row1">
+      <div class="item-name">
+        <span class="ch">${escapeHtml(it.channel_display)}</span>
+        <span>${escapeHtml(it.last_from || '')}</span>
+      </div>
+      <div class="item-row1-right">
+        <select class="status-select" data-val="${eff.status}">
+          ${STATUSES.map(s => `<option value="${s}" ${s===eff.status?'selected':''}>${s}</option>`).join('')}
+        </select>
+        <span class="item-time">${escapeHtml(formatTime(it.last_time))}</span>
+      </div>
+    </div>
+    ${metaBits.length ? `<div class="item-meta">${metaBits.join(' · ')}</div>` : ''}
+    ${previewHtml}
+    ${ov.note ? `<div class="note-display">📝 ${escapeHtml(ov.note)}</div>` : ''}
+    <div class="item-actions">
+      <a href="${it.permalink}" target="_blank">Open in Slack ↗</a>
+      <button data-act="more" title="More options" style="margin-left:auto;">•••</button>
+    </div>
+  `;
+
+  // Status change
+  el.querySelector('.status-select').addEventListener('change', (e) => {
+    const v = e.target.value;
+    overrideFor(it.key).status = v;
+    // If user sets DONE or WAITING, clear needs_reply; if they set AWAITING/BACKLOG/IN PROGRESS, set it
+    overrideFor(it.key).needs_reply = (v === 'AWAITING YOUR REPLY' || v === 'BACKLOG' || v === 'IN PROGRESS');
+    saveOverrides();
+    render();
+  });
+
+  // More (side panel)
+  el.querySelector('[data-act="more"]').addEventListener('click', () => openPanel(it));
+
+  return el;
+}
+
+function effectiveItem(it) {
+  const ov = overrides[it.key] || {};
+  return {
+    status: ov.status || it.status,
+    needs_reply: (ov.needs_reply !== undefined) ? ov.needs_reply : it.needs_reply,
+    snoozed: !!ov.snoozed,
+  };
+}
+
+function passFilter(it) {
+  const eff = effectiveItem(it);
+  if (eff.snoozed && !filter.showSnoozed) return false;
+  if (filter.scope === 'mentions' && it.source !== 'mention' && !it.mention_preview) return false;
+  if (filter.scope === 'awaiting' && !eff.needs_reply) return false;
+  if (filter.scope === 'dm' && it.kind !== 'dm') return false;
+  if (filter.scope === 'channels' && it.kind !== 'channel') return false;
+  if (filter.status && eff.status !== filter.status) return false;
+  if (filter.query) {
+    const q = filter.query.toLowerCase();
+    const hay = (it.channel_display + ' ' + (it.last_from||'') + ' ' + (it.last_text||'') + ' ' + (it.participants||[]).join(' ') + ' ' + it.project).toLowerCase();
+    if (!hay.includes(q)) return false;
+  }
+  return true;
+}
+
+function syncFilterPills() {
+  document.querySelectorAll('.pill[data-scope]').forEach(p => {
+    p.classList.toggle('active', p.dataset.scope === filter.scope);
+  });
+  document.querySelectorAll('.pill[data-status]').forEach(p => {
+    p.classList.toggle('active', filter.status && p.dataset.status === filter.status);
+  });
+  const sn = document.getElementById('showSnoozed');
+  sn.classList.toggle('active', filter.showSnoozed);
+  sn.textContent = filter.showSnoozed ? 'Hide snoozed' : 'Show snoozed';
+}
+
+// ---------- Helpers ----------
+function sumResults(raw, key) {
+  const qs = (raw && raw.search_results && raw.search_results[key]) || [];
+  return qs.reduce((n, q) => n + ((q.results||[]).length), 0);
+}
+function fmtHuman(iso) {
+  if (!iso) return iso;
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const pad = n => String(n).padStart(2,'0');
+  return `${pad(d.getDate())} ${months[d.getMonth()]}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fmtRelative(iso) {
+  const then = Date.parse(iso);
+  if (isNaN(then)) return iso;
+  const diff = (Date.now() - then) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  return Math.floor(diff/86400) + 'd ago';
+}
+function formatTime(t) {
+  if (!t) return '';
+  // "2026-04-21 13:18:16 IST" → "13:18 · 21 Apr"
+  const m = t.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+  if (!m) return t;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${m[4]}:${m[5]} · ${parseInt(m[3],10)} ${months[parseInt(m[2],10)-1]}`;
+}
+function snip(s, n) {
+  s = (s||'').trim(); if (s.length <= n) return s; return s.slice(0,n) + '…';
+}
+function escapeHtml(s) {
+  return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function setNotice(html, kind) {
+  const n = document.getElementById('notice');
+  if (!html) { n.classList.remove('show'); return; }
+  n.className = 'notice ' + (kind || 'info') + ' show';
+  n.innerHTML = html;
+}
+
+// ---------- Wire up ----------
+document.getElementById('btnRefresh').addEventListener('click', () => {
+  // Plugin variant: there is no local server. The cache lives in
+  // ~/.slacklens/dashboard.html and is rewritten by the slack-lens-refresh
+  // skill (run automatically every 2 hours, or on demand from Cowork).
+  // The button reloads the page so any fresh cache on disk is picked up,
+  // and reminds the user how to force a refresh.
+  const btn = document.getElementById('btnRefresh');
+  btn.disabled = true;
+  setNotice('To fetch fresh Slack data, open Cowork and say <b>refresh slack lens</b>. Reloading the on-disk cache now\u2026', 'info');
+  setTimeout(() => { location.reload(); }, 1200);
+});
+document.getElementById('search').addEventListener('input', (e) => {
+  filter.query = e.target.value.trim();
+  render();
+});
+document.querySelectorAll('.pill[data-scope]').forEach(p => {
+  p.addEventListener('click', () => { filter.scope = p.dataset.scope; render(); syncFilterPills(); });
+});
+document.querySelectorAll('.pill[data-status]').forEach(p => {
+  p.addEventListener('click', () => {
+    filter.status = (filter.status === p.dataset.status) ? null : p.dataset.status;
+    render(); syncFilterPills();
+  });
+});
+document.getElementById('showSnoozed').addEventListener('click', () => {
+  filter.showSnoozed = !filter.showSnoozed; render(); syncFilterPills();
+});
+
+loadCache();
+
+// ── Side panel ──
+let panelItem = null;
+
+function openPanel(it) {
+  panelItem = it;
+  const ov = overrideFor(it.key);
+  const eff = effectiveItem(it);
+
+  document.getElementById('sidePanelTitle').textContent = it.last_from || it.channel_display;
+  document.getElementById('sidePanelSub').textContent = it.channel_display + (it.msg_count > 1 ? ' · ' + it.msg_count + ' msgs' : '');
+
+  // Status select
+  const sel = document.getElementById('addonStatus');
+  sel.innerHTML = STATUSES.map(s => `<option value="${s}"${s === eff.status ? ' selected' : ''}>${s}</option>`).join('');
+  sel.className = 'addon-status';
+
+  // Note
+  document.getElementById('addonNote').value = ov.note || '';
+
+  // Snooze button
+  const snoozeBtn = document.getElementById('addonSnooze');
+  snoozeBtn.textContent = ov.snoozed ? 'Unsnooze' : 'Snooze';
+  snoozeBtn.className = 'addon-btn' + (ov.snoozed ? ' snooze-active' : '');
+
+  document.getElementById('sidePanel').classList.add('open');
+}
+
+function closePanel() {
+  // Save note on close
+  if (panelItem) {
+    const note = document.getElementById('addonNote').value.trim();
+    if (note) overrideFor(panelItem.key).note = note;
+    else delete overrideFor(panelItem.key).note;
+    saveOverrides();
+    render();
+  }
+  document.getElementById('sidePanel').classList.remove('open');
+  panelItem = null;
+}
+
+document.getElementById('sidePanelClose').addEventListener('click', closePanel);
+document.getElementById('sidePanelBackdrop').addEventListener('click', closePanel);
+
+document.getElementById('addonStatus').addEventListener('change', e => {
+  if (!panelItem) return;
+  const v = e.target.value;
+  overrideFor(panelItem.key).status = v;
+  overrideFor(panelItem.key).needs_reply = ['AWAITING YOUR REPLY','BACKLOG','IN PROGRESS'].includes(v);
+  saveOverrides();
+});
+
+document.getElementById('addonSnooze').addEventListener('click', () => {
+  if (!panelItem) return;
+  const ov = overrideFor(panelItem.key);
+  ov.snoozed = !ov.snoozed;
+  saveOverrides();
+  const btn = document.getElementById('addonSnooze');
+  btn.textContent = ov.snoozed ? 'Unsnooze' : 'Snooze';
+  btn.className = 'addon-btn' + (ov.snoozed ? ' snooze-active' : '');
+});
+
+document.getElementById('addonReset').addEventListener('click', () => {
+  if (!panelItem) return;
+  delete overrides[panelItem.key];
+  saveOverrides();
+  closePanel();
+  render();
+});
+</script>
+
+<div class="side-panel-overlay" id="sidePanel">
+  <div class="side-panel-backdrop" id="sidePanelBackdrop"></div>
+  <div class="side-panel">
+    <div class="side-panel-head">
+      <div>
+        <div class="side-panel-title" id="sidePanelTitle">Thread</div>
+        <div class="side-panel-sub" id="sidePanelSub"></div>
+      </div>
+      <button class="side-panel-close" id="sidePanelClose">&#x2715;</button>
+    </div>
+    <div class="side-panel-body">
+      <div class="addon-section">
+        <div class="addon-label">Status</div>
+        <select class="addon-status" id="addonStatus"></select>
+      </div>
+      <div class="addon-section">
+        <div class="addon-label">Note</div>
+        <textarea class="addon-note" id="addonNote" placeholder="Add a note — saved in your browser"></textarea>
+      </div>
+      <div class="addon-section">
+        <div class="addon-label">Actions</div>
+        <button class="addon-btn" id="addonSnooze">Snooze</button>
+        <button class="addon-btn danger" id="addonReset" style="margin-top:6px;">Reset overrides</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

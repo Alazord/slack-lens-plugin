@@ -1,0 +1,9 @@
+# Build artifacts
+*.bak
+*.tmp
+.DS_Store
+__pycache__/
+*.pyc
+
+# The packaged .plugin file lives in releases/ or is built on demand
+*.plugin

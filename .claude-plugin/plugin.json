@@ -1,0 +1,10 @@
+{
+  "name": "slack-lens",
+  "version": "0.1.0",
+  "description": "Personal Slack triage dashboard. Mentions, DMs, and active threads in one view, with VIPs floated to the top. Auto-refreshes every 2 hours.",
+  "author": {
+    "name": "Shailendra Singh"
+  },
+  "homepage": "https://github.com/Alazord/slacklens",
+  "keywords": ["slack", "triage", "dashboard", "productivity"]
+}
