@@ -9,11 +9,13 @@
   "plugins": [
     {
       "name": "slacklens",
-      "source": {
-        "source": "github",
-        "repo": "Alazord/slack-lens-plugin"
-      },
-      "description": "Personal Slack triage dashboard. Mentions, DMs, and active threads in one view, with VIPs floated to the top. Auto-refreshes every 2 hours."
+      "description": "Personal Slack triage dashboard. Mentions, DMs, and active threads in one view, with VIPs floated to the top. Auto-refreshes every 2 hours.",
+      "version": "0.1.0",
+      "source": "./",
+      "author": {
+        "name": "Shailendra Singh",
+        "email": "shailendra.singh@unifyapps.com"
+      }
     }
   ]
 }
