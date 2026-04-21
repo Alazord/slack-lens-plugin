@@ -7,3 +7,7 @@ __pycache__/
 
 # The packaged .plugin file lives in releases/ or is built on demand
 *.plugin
+
+# Dev-only — don't ship to teammates
+skills/slacklens-rerender/
+fixtures/
