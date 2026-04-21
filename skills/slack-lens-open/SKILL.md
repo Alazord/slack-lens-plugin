@@ -9,7 +9,7 @@ You are opening the SlackLens dashboard.
 
 ```bash
 DASH="$HOME/.slacklens/dashboard.html"
-if [ \! -f "$DASH" ]; then
+if [ ! -f "$DASH" ]; then
   echo "MISSING"
 fi
 ```

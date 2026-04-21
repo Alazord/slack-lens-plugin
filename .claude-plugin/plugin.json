@@ -5,6 +5,11 @@
   "author": {
     "name": "Shailendra Singh"
   },
-  "homepage": "https://github.com/Alazord/slacklens",
-  "keywords": ["slack", "triage", "dashboard", "productivity"]
+  "homepage": "https://github.com/Alazord/slack-lens-plugin",
+  "keywords": [
+    "slack",
+    "triage",
+    "dashboard",
+    "productivity"
+  ]
 }

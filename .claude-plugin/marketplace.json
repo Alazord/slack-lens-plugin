@@ -1,0 +1,13 @@
+{
+  "schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "Slack Lens",
+  "owner": "Alazord",
+  "description": "Personal Slack triage dashboard for teams.",
+  "plugins": [
+    {
+      "name": "slack-lens",
+      "source": ".",
+      "description": "Pulls your DMs, mentions, and VIP threads into a single HTML view, refreshed every 2 hours. Three skills: set up, refresh, open."
+    }
+  ]
+}

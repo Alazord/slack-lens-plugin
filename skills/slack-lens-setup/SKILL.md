@@ -85,10 +85,24 @@ config = {
 with open(os.path.join(home_dir, "config.json"), "w") as f:
     json.dump(config, f, indent=2)
 
-# Copy the bundled dashboard template into the user's data dir
-plugin_root = os.environ["PLUGIN_ROOT"]
+# Copy the bundled dashboard template into the user's data dir.
+# Sanity-check that CLAUDE_PLUGIN_ROOT is populated and the template exists
+# before we copy — if Cowork didn't set the env var, shutil.copy would fail
+# with a confusing error that hides the real cause.
+plugin_root = os.environ.get("PLUGIN_ROOT", "").strip()
+if not plugin_root:
+    raise SystemExit(
+        "ERROR: $CLAUDE_PLUGIN_ROOT is not set. "
+        "The plugin runtime should populate this — make sure slack-lens is "
+        "installed as a Cowork plugin (not cloned and run manually)."
+    )
 src = os.path.join(plugin_root, "skills", "slack-lens-refresh",
                    "references", "dashboard.template.html")
+if not os.path.isfile(src):
+    raise SystemExit(
+        f"ERROR: dashboard template not found at {src}. "
+        "The plugin install may be incomplete — try reinstalling slack-lens."
+    )
 dst = os.path.join(home_dir, "dashboard.html")
 shutil.copy(src, dst)
 
@@ -115,13 +129,17 @@ values with what you collected in Steps 2 and 3.
 
 ## Step 5 — Register the auto-refresh schedule
 
-Call `create_scheduled_task` from the scheduled-tasks MCP with:
+Call the `create_scheduled_task` tool from the scheduled-tasks MCP
+(full tool name: `mcp__scheduled-tasks__create_scheduled_task`) with these
+exact fields:
 
-- `taskName`: `slack-lens-refresh`
-- `cronExpression`: `0 */2 * * *`   (every 2 hours, on the hour)
+- `taskId`: `slack-lens-refresh`   (kebab-case id; required)
+- `description`: `Refresh the SlackLens dashboard cache every 2 hours.`   (required)
+- `cronExpression`: `0 */2 * * *`   (every 2 hours, on the hour, in local time)
 - `prompt`: `Run the slack-lens-refresh skill from the slack-lens plugin to refresh the SlackLens dashboard cache.`
 
-If a task with that name already exists, skip — don't error.
+If a task with that id already exists, the MCP will error — catch it and
+continue; don't fail setup over a re-registration.
 
 ## Step 6 — Trigger the first refresh
 
