@@ -42,4 +42,3 @@ State lives in `~/.slacklens/`: `config.json`, `cache.json`, `dashboard.html`. W
 | Dashboard shows old data | Say `refresh slack lens` in Cowork |
 | Dashboard is blank or "No cache loaded" | Say `refresh slack lens`. If still blank, wipe `~/.slacklens/` and re-run setup |
 
-Still stuck? Ping `#ai-agent-frontend` or DM @Shailendra.
