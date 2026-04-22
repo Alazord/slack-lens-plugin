@@ -540,6 +540,64 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   outline: 0;
 }
 .sl-panel-note textarea:focus { border-color: var(--ink-muted); }
+
+/* ========================================================================
+   Hover actions on item rows + inline dropdown menu
+   ======================================================================== */
+.sl-item-actions {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  display: inline-flex; gap: 2px;
+  opacity: 0; pointer-events: none;
+  transition: opacity 120ms;
+  background: var(--surface);
+  padding: 3px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+}
+.sl-item:hover .sl-item-actions { opacity: 1; pointer-events: auto; }
+.sl-item-actions button {
+  border: 0; background: transparent;
+  font-size: 13px;
+  color: var(--ink-muted);
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.sl-item-actions button:hover { background: var(--surface-2); color: var(--ink); }
+
+.sl-menu {
+  position: absolute;
+  z-index: 60;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  padding: 4px;
+  min-width: 180px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+}
+.sl-menu button {
+  display: block; width: 100%;
+  text-align: left;
+  padding: 5px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit; font-size: inherit;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.sl-menu button:hover { background: var(--surface-2); }
+
+/* Snoozed visual treatment */
+.sl-item[data-snoozed="1"] { opacity: 0.5; }
+.sl-item[data-snoozed="1"] .sl-item-bar { position: relative; }
+.sl-item[data-snoozed="1"] .sl-item-bar::after {
+  content: "☾"; position: absolute; left: 3px; top: -10px;
+  font-size: 9px; color: var(--ink-faint);
+}
 </style>
 </head>
 <body>
@@ -998,6 +1056,24 @@ function renderItem(it) {
     }
   }
   row.appendChild(body);
+
+  // Snoozed visual flag
+  const eff2 = effectiveItem(it);
+  const snoozedUntil = eff2.snooze_until ? Date.parse(eff2.snooze_until) : 0;
+  if (snoozedUntil && snoozedUntil > Date.now()) row.dataset.snoozed = '1';
+
+  // Hover action cluster
+  const actions = document.createElement('div');
+  actions.className = 'sl-item-actions';
+  actions.innerHTML = [
+    '<button data-action="status"  title="Change status"  aria-label="Change status">◐</button>',
+    '<button data-action="snooze"  title="Snooze"         aria-label="Snooze">☾</button>',
+    '<button data-action="done"    title="Mark done"      aria-label="Mark done">✓</button>',
+    '<button data-action="open"    title="Open in Slack"  aria-label="Open in Slack">↗</button>',
+    '<button data-action="copy"    title="Copy permalink" aria-label="Copy permalink">⎘</button>',
+  ].join('');
+  row.appendChild(actions);
+
   return row;
 }
 
@@ -1258,9 +1334,8 @@ function openPanel(itemKey, triggerEl) {
     overrideFor(itemKey).status = 'DONE';
     saveOverrides(); render(); closePanel();
   };
-  // actStatus + actSnooze wired in Task 11 (via openStatusMenu / openSnoozeMenu)
-  document.getElementById('actStatus').onclick = null;
-  document.getElementById('actSnooze').onclick = null;
+  document.getElementById('actStatus').onclick = (e) => openStatusMenu(it, e.currentTarget);
+  document.getElementById('actSnooze').onclick = (e) => openSnoozeMenu(it, e.currentTarget);
 
   // Render the thread messages
   const threadEl = document.getElementById('panelThread');
@@ -1309,6 +1384,71 @@ function closePanel() {
   panelTriggerEl = null;
 }
 
+// ========================================================================
+// Row actions + inline menus (status / snooze)
+// ========================================================================
+function handleRowAction(action, it, anchorEl) {
+  if (!it) return;
+  if (action === 'open')   { if (it.permalink) window.open(it.permalink, '_blank'); return; }
+  if (action === 'copy')   { if (it.permalink && navigator.clipboard) navigator.clipboard.writeText(it.permalink); return; }
+  if (action === 'done')   { overrideFor(it.key).status = 'DONE'; saveOverrides(); render(); return; }
+  if (action === 'status') return openStatusMenu(it, anchorEl);
+  if (action === 'snooze') return openSnoozeMenu(it, anchorEl);
+}
+
+function openMenu(anchorEl, itemsList) {
+  closeOpenMenu();
+  const menu = document.createElement('div');
+  menu.className = 'sl-menu';
+  menu.id = 'activeMenu';
+  for (const mi of itemsList) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = mi.label;
+    b.addEventListener('click', () => { mi.onClick(); closeOpenMenu(); });
+    menu.appendChild(b);
+  }
+  const rect = anchorEl.getBoundingClientRect();
+  menu.style.left = Math.max(8, rect.right - 180) + 'px';
+  menu.style.top = (rect.bottom + 4 + window.scrollY) + 'px';
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', menuOutsideClick, { once: true }), 0);
+}
+function closeOpenMenu() {
+  const m = document.getElementById('activeMenu');
+  if (m) m.remove();
+}
+function menuOutsideClick(e) {
+  if (!e.target.closest('#activeMenu')) closeOpenMenu();
+}
+function openStatusMenu(it, anchorEl) {
+  openMenu(anchorEl, STATUSES.map(s => ({
+    label: s,
+    onClick: () => { overrideFor(it.key).status = s; saveOverrides(); render(); },
+  })));
+}
+function openSnoozeMenu(it, anchorEl) {
+  const now = Date.now();
+  openMenu(anchorEl, [
+    { label: '1 hour',             onClick: () => snooze(it, now + 60 * 60 * 1000) },
+    { label: 'Until 9am tomorrow', onClick: () => {
+        const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+        snooze(it, d.getTime());
+    }},
+    { label: 'Custom…', onClick: () => {
+        const s = prompt('Snooze until (YYYY-MM-DD HH:MM):');
+        if (!s) return;
+        const t = Date.parse(s.replace(' ', 'T'));
+        if (!isNaN(t)) snooze(it, t);
+    }},
+    { label: 'Clear snooze', onClick: () => { overrideFor(it.key).snooze_until = null; saveOverrides(); render(); }},
+  ]);
+}
+function snooze(it, millis) {
+  overrideFor(it.key).snooze_until = new Date(millis).toISOString();
+  saveOverrides(); render();
+}
+
 function bootSidePanel() {
   document.getElementById('panelClose').addEventListener('click', closePanel);
   document.getElementById('panelBackdrop').addEventListener('click', closePanel);
@@ -1316,13 +1456,36 @@ function bootSidePanel() {
     if (e.key === 'Escape' && !document.getElementById('sidePanel').hidden) closePanel();
   });
 
-  // Click delegation on the channel flow
+  // Click delegation on the channel flow — handle hover-action clicks first,
+  // fall through to row click → open panel.
   document.getElementById('channelFlow').addEventListener('click', e => {
-    // Ignore clicks on hover actions (Task 11)
-    if (e.target.closest('.sl-item-actions')) return;
+    const actBtn = e.target.closest('.sl-item-actions button');
+    if (actBtn) {
+      const row = actBtn.closest('.sl-item');
+      const it = findItem(row.dataset.key);
+      handleRowAction(actBtn.dataset.action, it, actBtn);
+      e.stopPropagation();
+      return;
+    }
     const row = e.target.closest('.sl-item');
     if (!row) return;
     openPanel(row.dataset.key, row);
+  });
+
+  // Right-click shows the same combined menu
+  document.getElementById('channelFlow').addEventListener('contextmenu', e => {
+    const row = e.target.closest('.sl-item');
+    if (!row) return;
+    e.preventDefault();
+    const it = findItem(row.dataset.key);
+    if (!it) return;
+    openMenu(row, [
+      { label: 'Open in Slack',   onClick: () => { if (it.permalink) window.open(it.permalink, '_blank'); } },
+      { label: 'Copy permalink',  onClick: () => { if (it.permalink && navigator.clipboard) navigator.clipboard.writeText(it.permalink); } },
+      { label: 'Mark done',       onClick: () => { overrideFor(it.key).status = 'DONE'; saveOverrides(); render(); } },
+      { label: 'Change status…',  onClick: () => openStatusMenu(it, row) },
+      { label: 'Snooze…',         onClick: () => openSnoozeMenu(it, row) },
+    ]);
   });
 }
 </script>
