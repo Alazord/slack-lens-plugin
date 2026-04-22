@@ -57,18 +57,34 @@ perms = cfg.setdefault("permissions", {})
 allow = perms.setdefault("allow", [])
 
 needed = [
-    "Bash(mkdir:*)",
-    "Bash(python3:*)",
-    "Bash(open:*)",
-    "Bash(test:*)",
-    "Bash([:*)",
+    # Shell commands the skills invoke directly. Every one of these has
+    # to be here, otherwise the user sees a permission prompt on first
+    # use of the calling skill. The goal is: one prompt at install, then
+    # zero prompts across setup/refresh/open/doctor/vips/unschedule.
+    "Bash(mkdir:*)",        # setup Step 1
+    "Bash(python3:*)",      # every skill's inline python blocks
+    "Bash(open:*)",         # macOS browser launcher (slacklens-open)
+    "Bash(xdg-open:*)",     # Linux browser launcher (slacklens-open)
+    "Bash(wslview:*)",      # WSL browser launcher (slacklens-open)
+    "Bash(command:*)",      # `command -v` probe in slacklens-open
+    "Bash(sleep:*)",        # setup Step 6 retry backoff
+    "Bash(echo:*)",         # diagnostic prints in slacklens-open / setup
+    "Bash(test:*)",         # `test -f` in slacklens-open
+    "Bash([:*)",            # `[ -f ... ]` in slacklens-open
+    # Slack MCP — four read-only tools, no write, no send.
     "mcp__claude_ai_Slack__slack_search_users",
     "mcp__claude_ai_Slack__slack_read_user_profile",
     "mcp__claude_ai_Slack__slack_search_public_and_private",
     "mcp__claude_ai_Slack__slack_read_thread",
+    # Optional auto-refresh. The user is asked in Step 5 whether to
+    # actually register it; these entries are here so that IF they opt
+    # in later (or re-run setup), there's no second permission prompt.
     "mcp__scheduled-tasks__create_scheduled_task",
     "mcp__scheduled-tasks__delete_scheduled_task",
+    # Refresh writes this intermediate file; tight path, not a wildcard.
     "Write(/tmp/slacklens-refresh.json)",
+    # Optional Cowork side-panel mirror. Absent on most runtimes; no-op
+    # if missing.
     "mcp__cowork__present_files",
 ]
 added = [rule for rule in needed if rule not in allow]

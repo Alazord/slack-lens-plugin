@@ -78,8 +78,10 @@ threads. It never sends messages on your behalf.
   first setup.
 
 **Shell:**
-- `mkdir`, `python3`, `open`, `test`, `[` — all scoped to the narrow
-  subcommands the skills actually call.
+- `mkdir`, `python3`, `test`, `[`, `echo`, `sleep`, `command` — small
+  scoped set used by the skills.
+- `open` (macOS) / `xdg-open` (Linux) / `wslview` (WSL) — whichever
+  one your system has, for launching the dashboard in the browser.
 
 **Scheduled tasks (opt-in):**
 - Optionally registers one task, `slacklens-refresh`, running every 8
