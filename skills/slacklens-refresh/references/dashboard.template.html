@@ -123,6 +123,156 @@ body {
   text-align: right;
 }
 .sl-footer code { background: var(--surface-2); padding: 1px 5px; border-radius: 3px; }
+
+/* ========================================================================
+   Channel header
+   ======================================================================== */
+.sl-channel { margin-bottom: var(--channel-mb); }
+.sl-channel-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: var(--chanhead-py) 0;
+  border-bottom: 1px solid var(--border-faint);
+  margin-bottom: var(--item-gap);
+}
+.sl-channel-name {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-md);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  max-width: calc(100% - 100px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sl-channel-meta {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.sl-vip {
+  display: inline-block;
+  margin-left: 6px;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--vip-red);
+}
+
+/* ========================================================================
+   Item row
+   ======================================================================== */
+.sl-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2px 1fr;
+  gap: 10px;
+  padding: var(--item-py) 6px var(--item-py) 0;
+  border-bottom: 1px solid var(--border-faint);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.sl-item:last-child { border-bottom: 0; }
+.sl-item:hover { background: var(--surface-2); }
+.sl-item[data-active="1"] .sl-item-bar { box-shadow: 0 0 0 3px rgba(182, 69, 53, 0.18); }
+
+.sl-item-bar {
+  border-radius: 2px;
+  background: var(--status-red);  /* default; overridden per data-status below */
+}
+.sl-item[data-status="AWAITING YOUR REPLY"] .sl-item-bar { background: var(--status-red); }
+.sl-item[data-status="IN PROGRESS"]         .sl-item-bar { background: var(--status-amber); }
+.sl-item[data-status="DISCUSSION"]          .sl-item-bar { background: var(--status-amber); }
+.sl-item[data-status="WAITING"]             .sl-item-bar { background: var(--status-gray); }
+.sl-item[data-status="BACKLOG"]             .sl-item-bar { background: var(--status-gray); }
+.sl-item[data-status="DONE"]                .sl-item-bar { background: var(--status-green); }
+
+.sl-item-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.sl-item-from {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+.sl-item-time {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.sl-item-msg {
+  font-family: var(--font-serif);
+  font-size: var(--fs-base);
+  color: var(--ink-muted);
+  line-height: 1.4;
+  margin-top: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sl-item-thread {
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+  margin-top: 3px;
+}
+
+/* ========================================================================
+   Banner (stale cache, schema mismatch, fetch failed)
+   ======================================================================== */
+.sl-banner {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--ink-muted);
+  margin-bottom: 12px;
+}
+.sl-banner[data-severity="warn"] {
+  border-color: var(--status-amber);
+  color: var(--status-amber);
+}
+
+/* ========================================================================
+   Empty states
+   ======================================================================== */
+.sl-empty {
+  padding: 32px 20px;
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  text-align: center;
+  font-family: var(--font-sans);
+  margin-top: 20px;
+}
+.sl-empty h4 {
+  font-family: var(--font-serif);
+  font-size: var(--fs-md);
+  margin: 0 0 4px;
+  color: var(--ink);
+  font-weight: 500;
+}
+.sl-empty p { font-size: var(--fs-sm); color: var(--ink-muted); margin: 0; }
+.sl-empty button {
+  margin-top: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  padding: 6px 14px;
+  background: var(--ink);
+  color: var(--surface);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
