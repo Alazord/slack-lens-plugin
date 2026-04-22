@@ -533,7 +533,7 @@ const VIP_NAMES = [];
 
 let raw = null;       // parsed cache JSON
 let items = [];       // normalized list
-let filter = { scope:'all', status:null, query:'', showSnoozed:false };
+let filter = { scope:'all', status:[], query:'', showSnoozed:false };
 let overrides = loadOverrides();
 // Workspace origin (e.g. 'https://example.slack.com'), derived from the
 // first permalink we see in the cache. Falls back to slack.com so the
@@ -890,8 +890,93 @@ function renderItem(it) {
   return row;
 }
 
-function applyFilter(xs) { return xs; }  // Task 9 implements
-function updateCounts() {}                // Task 9
+function applyFilter(xs) {
+  const q = (filter.query || '').toLowerCase().trim();
+  const now = Date.now();
+  // Migration safety: allow filter.status as string or array
+  const statusList = Array.isArray(filter.status)
+    ? filter.status
+    : (filter.status ? [filter.status] : []);
+
+  return xs.filter(it => {
+    const eff = effectiveItem(it);
+
+    // Snoozed filter (unless showing snoozed)
+    const snoozedUntil = eff.snooze_until ? Date.parse(eff.snooze_until) : 0;
+    const isSnoozed = snoozedUntil && snoozedUntil > now;
+    if (isSnoozed && !filter.showSnoozed) return false;
+
+    // Scope
+    if (filter.scope === 'needs_reply'  && !eff.needs_reply)      return false;
+    if (filter.scope === 'mentions'     && it.source !== 'mention') return false;
+    if (filter.scope === 'dms'          && it.kind !== 'dm')      return false;
+    if (filter.scope === 'channels'     && it.kind !== 'channel') return false;
+
+    // Status (multi-select)
+    if (statusList.length && !statusList.includes((eff.status || '').toUpperCase())) return false;
+
+    // Search across channel/person/text/participants
+    if (q) {
+      const hay = (it.channel_display + ' ' + (it.last_from || '') + ' ' +
+                   (it.last_text || '') + ' ' + (it.participants || []).join(' ')).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+
+    return true;
+  });
+}
+
+function updateCounts(shownItems) {
+  const counts = { all: shownItems.length, needs_reply: 0, mentions: 0, dms: 0, channels: 0 };
+  for (const it of shownItems) {
+    const eff = effectiveItem(it);
+    if (eff.needs_reply)            counts.needs_reply++;
+    if (it.source === 'mention')    counts.mentions++;
+    if (it.kind === 'dm')           counts.dms++;
+    if (it.kind === 'channel')      counts.channels++;
+  }
+  document.querySelectorAll('#categoryPills .sl-pill').forEach(btn => {
+    const k = btn.dataset.scope;
+    const c = btn.querySelector('.count');
+    if (c && counts[k] !== undefined) c.textContent = counts[k];
+  });
+}
+
+function bootFilters() {
+  // Category pills (single-select)
+  document.querySelectorAll('#categoryPills .sl-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      filter.scope = btn.dataset.scope;
+      document.querySelectorAll('#categoryPills .sl-pill').forEach(b =>
+        b.classList.toggle('active', b === btn));
+      render();
+    });
+  });
+  // Status pills (multi-select)
+  document.querySelectorAll('#statusPills .sl-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const s = btn.dataset.status;
+      if (!Array.isArray(filter.status)) filter.status = [];
+      const i = filter.status.indexOf(s);
+      if (i >= 0) { filter.status.splice(i, 1); btn.classList.remove('active'); }
+      else        { filter.status.push(s);      btn.classList.add('active'); }
+      render();
+    });
+  });
+  // Search (debounced 150ms)
+  const input = document.getElementById('searchInput');
+  let tmr = null;
+  if (input) input.addEventListener('input', () => {
+    clearTimeout(tmr);
+    tmr = setTimeout(() => { filter.query = input.value; render(); }, 150);
+  });
+  // Show snoozed
+  const snz = document.getElementById('showSnoozed');
+  if (snz) snz.addEventListener('change', () => { filter.showSnoozed = snz.checked; render(); });
+  // Reload button
+  const reload = document.getElementById('reloadBtn');
+  if (reload) reload.addEventListener('click', () => loadCache());
+}
 function updateFreshness() {              // Task 12 completes
   const f = document.getElementById('freshness');
   if (!f || !raw) return;
@@ -1016,6 +1101,7 @@ function bootTheme() {
 // ---------- Wire up ----------
 bootDensity();
 bootTheme();
+bootFilters();
 loadCache();
 
 // ── Side panel — stubs; wired in Task 3 ──
