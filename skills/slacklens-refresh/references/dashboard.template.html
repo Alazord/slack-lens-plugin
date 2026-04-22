@@ -1337,12 +1337,24 @@ function updateFreshness() {
   if (!raw || !raw.refreshed_at) {
     f.textContent = `${total} · no data`;
     f.removeAttribute('data-stale');
+    f.removeAttribute('title');
     return;
   }
   const t = Date.parse(raw.refreshed_at);
   const ageHours = (Date.now() - t) / 3600000;
-  f.textContent = `${total} · ${humanAge(ageHours)}`;
-  f.title = raw.refreshed_at;
+  // Show both the precise refresh time AND the relative age, so the user
+  // can decide at a glance whether to force another refresh. Format:
+  //   "21 · 14:30 · 2h ago"
+  //   "21 · Apr 21 14:30 · 2d ago"   (older than 24h)
+  const d = new Date(t);
+  const pad = n => String(n).padStart(2, '0');
+  const hhmm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const datePrefix = (ageHours >= 24)
+    ? `${months[d.getMonth()]} ${d.getDate()} `
+    : '';
+  f.textContent = `${total} · ${datePrefix}${hhmm} · ${humanAge(ageHours)}`;
+  f.title = `Cache refreshed at ${raw.refreshed_at}. Say "refresh slacklens" for a delta update, "deep refresh slacklens" to force a full 48h re-fetch.`;
   f.dataset.stale = (ageHours > STALE_CACHE_HOURS) ? '1' : '0';
 }
 
