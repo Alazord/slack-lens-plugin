@@ -429,6 +429,117 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   outline: 2px solid var(--ink);
   outline-offset: 1px;
 }
+
+/* ========================================================================
+   Side panel
+   ======================================================================== */
+.sl-panel-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.15);
+  z-index: 40;
+}
+.sl-panel {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 420px; max-width: 100vw;
+  background: var(--surface-2);
+  border-left: 1px solid var(--border);
+  z-index: 50;
+  display: flex; flex-direction: column;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.08);
+}
+@media (max-width: 899px) { .sl-panel { width: 100vw; } }
+
+.sl-panel-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border-faint);
+}
+.sl-panel-title {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-lg);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.sl-panel-meta {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-faint);
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+  display: flex; justify-content: space-between; gap: 12px;
+}
+.sl-panel-meta .k { color: var(--ink-faint); margin-right: 6px; }
+
+.sl-panel-actions {
+  display: flex; gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-faint);
+  flex-wrap: wrap;
+}
+.sl-btn {
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.sl-btn.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+
+.sl-panel-thread { flex: 1; padding: 14px 16px; overflow-y: auto; }
+.sl-panel-thread .msg { margin-bottom: 14px; }
+.sl-panel-thread .msg-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+}
+.sl-panel-thread .msg-from { font-weight: 600; color: var(--ink); }
+.sl-panel-thread .msg-time { font-family: var(--font-mono); color: var(--ink-faint); }
+.sl-panel-thread .msg-body {
+  font-family: var(--font-serif);
+  font-size: var(--fs-base);
+  color: var(--ink-muted);
+  line-height: 1.5;
+  margin-top: 3px;
+  white-space: pre-wrap;
+}
+.sl-panel-thread .msg.me .msg-from { color: var(--ink-faint); }
+
+.sl-panel-note {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-faint);
+  background: var(--surface);
+}
+.sl-note-label {
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 6px;
+}
+.sl-panel-note textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  resize: vertical;
+  outline: 0;
+}
+.sl-panel-note textarea:focus { border-color: var(--ink-muted); }
 </style>
 </head>
 <body>
@@ -1102,19 +1213,117 @@ function bootTheme() {
 bootDensity();
 bootTheme();
 bootFilters();
+bootSidePanel();
 loadCache();
 
-// ── Side panel — stubs; wired in Task 3 ──
-let panelItem = null;
+// ========================================================================
+// Side panel
+// ========================================================================
+let panelItemKey = null;     // key of currently-open item (null = closed)
+let panelTriggerEl = null;   // element that opened it, for focus restoration
 
-function openPanel(it) {
-  // Stubbed during redesign — Task 3 wires this to the new markup.
-  panelItem = it;
+function findItem(key) { return items.find(it => it.key === key); }
+
+function threadMessagesFor(it) {
+  // Find a full thread in raw.threads by matching channel_id prefix;
+  // fall back to a synthetic single-message array.
+  if (raw && raw.threads) {
+    const key = Object.keys(raw.threads).find(k => k.startsWith(it.channel_id + ':'));
+    if (key && raw.threads[key] && raw.threads[key].messages) {
+      return raw.threads[key].messages;
+    }
+  }
+  return [{ from: it.last_from, ts: '0', time: it.last_time, text: it.last_text, permalink: it.permalink }];
+}
+
+function openPanel(itemKey, triggerEl) {
+  const it = findItem(itemKey);
+  if (!it) return;
+  panelItemKey = itemKey;
+  panelTriggerEl = triggerEl || null;
+
+  const eff = effectiveItem(it);
+  document.getElementById('panelChannel').textContent = it.channel_display || it.channel_name || it.channel_id;
+  const vip = document.getElementById('panelVip');
+  vip.hidden = !it.channel_is_vip;
+  document.getElementById('panelChannelType').textContent =
+    it.kind === 'dm' ? 'Direct message' : (it.kind === 'channel' ? 'Channel' : 'Thread');
+  document.getElementById('panelStatus').textContent = eff.status || 'AWAITING YOUR REPLY';
+  document.getElementById('panelNote').value = eff.note || '';
+
+  // Action handlers (bound fresh each open so they close over `it`)
+  document.getElementById('actOpen').onclick = () => { if (it.permalink) window.open(it.permalink, '_blank'); };
+  document.getElementById('actCopy').onclick = () => { if (it.permalink && navigator.clipboard) navigator.clipboard.writeText(it.permalink); };
+  document.getElementById('actDone').onclick = () => {
+    overrideFor(itemKey).status = 'DONE';
+    saveOverrides(); render(); closePanel();
+  };
+  // actStatus + actSnooze wired in Task 11 (via openStatusMenu / openSnoozeMenu)
+  document.getElementById('actStatus').onclick = null;
+  document.getElementById('actSnooze').onclick = null;
+
+  // Render the thread messages
+  const threadEl = document.getElementById('panelThread');
+  threadEl.innerHTML = '';
+  for (const m of threadMessagesFor(it)) {
+    const wrap = document.createElement('div');
+    wrap.className = 'msg' + (isMe(m.from) ? ' me' : '');
+    const head = document.createElement('div');
+    head.className = 'msg-head';
+    const fromEl = document.createElement('span');
+    fromEl.className = 'msg-from';
+    fromEl.textContent = cleanName(m.from || '');
+    const timeEl = document.createElement('span');
+    timeEl.className = 'msg-time';
+    timeEl.textContent = (m.time || '').slice(11, 16) || m.ts;
+    head.appendChild(fromEl); head.appendChild(timeEl);
+    const body = document.createElement('div');
+    body.className = 'msg-body';
+    body.textContent = m.text || '';
+    wrap.appendChild(head); wrap.appendChild(body);
+    threadEl.appendChild(wrap);
+  }
+
+  // Highlight the selected row in background
+  document.querySelectorAll('.sl-item[data-active="1"]').forEach(el => el.removeAttribute('data-active'));
+  const row = document.querySelector(`.sl-item[data-key="${CSS.escape(itemKey)}"]`);
+  if (row) row.setAttribute('data-active', '1');
+
+  document.getElementById('sidePanel').hidden = false;
+  document.getElementById('panelBackdrop').hidden = false;
+  document.getElementById('panelClose').focus();
+
+  // Persist note on blur
+  document.getElementById('panelNote').onblur = () => {
+    overrideFor(itemKey).note = document.getElementById('panelNote').value;
+    saveOverrides();
+  };
 }
 
 function closePanel() {
-  // Stubbed during redesign — Task 3 wires this to the new markup.
-  panelItem = null;
+  panelItemKey = null;
+  document.getElementById('sidePanel').hidden = true;
+  document.getElementById('panelBackdrop').hidden = true;
+  document.querySelectorAll('.sl-item[data-active="1"]').forEach(el => el.removeAttribute('data-active'));
+  if (panelTriggerEl && typeof panelTriggerEl.focus === 'function') panelTriggerEl.focus();
+  panelTriggerEl = null;
+}
+
+function bootSidePanel() {
+  document.getElementById('panelClose').addEventListener('click', closePanel);
+  document.getElementById('panelBackdrop').addEventListener('click', closePanel);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !document.getElementById('sidePanel').hidden) closePanel();
+  });
+
+  // Click delegation on the channel flow
+  document.getElementById('channelFlow').addEventListener('click', e => {
+    // Ignore clicks on hover actions (Task 11)
+    if (e.target.closest('.sl-item-actions')) return;
+    const row = e.target.closest('.sl-item');
+    if (!row) return;
+    openPanel(row.dataset.key, row);
+  });
 }
 </script>
 </body>
