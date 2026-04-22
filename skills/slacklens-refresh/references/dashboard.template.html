@@ -1321,10 +1321,6 @@ function snip(s, n) {
 function escapeHtml(s) {
   return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-function setNotice(html, kind) {
-  // Stubbed during redesign — banner wired in Task 3.
-  // (old id 'notice' is gone; new id is 'banner')
-}
 
 // ========================================================================
 // Density toggle (slacklens.density: 'compact' | 'balanced' | 'spacious')
