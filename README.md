@@ -91,3 +91,19 @@ The `version` field in `.claude-plugin/plugin.json` bumps on every release.
 | Setup asks for several permissions in a row | Expected on first run. Approve "always allow" for each. Subsequent refreshes run silently. |
 | Teammate on Linux/WSL — `open slacklens` does nothing | Install `xdg-utils` or set `$BROWSER`. The dashboard still lives at `~/.slacklens/dashboard.html`. |
 | Want to revoke what SlackLens was granted | Run `/permissions` in chat, or edit `~/.claude/settings.json` and remove SlackLens's entries (they start with `Bash(mkdir:*)` or `mcp__claude_ai_Slack__*`). |
+
+---
+
+## Before you distribute (maintainer)
+
+Run this checklist before cutting a new release:
+
+1. `python3 scripts/privacy-check.py` — must print `clean.` and exit 0.
+2. Walk `docs/ACCEPTANCE.md` on a fresh profile (or clean state:
+   `rm -rf ~/.slacklens ~/.claude/plugins/cache/alazord`).
+3. Bump `version` in both `.claude-plugin/plugin.json` and
+   `.claude-plugin/marketplace.json`. They must match.
+4. Commit with a `vX.Y.Z:` prefix so the tag reads cleanly.
+5. Tag: `git tag vX.Y.Z && git push origin main --tags`.
+6. Announce to existing installers: "Run `/plugin marketplace update
+   alazord` to pull vX.Y.Z".
