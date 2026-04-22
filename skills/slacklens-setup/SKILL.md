@@ -111,15 +111,22 @@ Confirm once: "I detected you as <USER_NAME> (<USER_ID>) — is this right?"
 
 ## Step 3 — Ask who to prioritise
 
-Ask: "Who do you want to prioritise at the top of your dashboard?
-Typically your manager, CEO, or key stakeholders. Mention them by name,
-or say 'skip'."
+Ask, verbatim:
 
-For each name, call `slack_search_users` and collect the user IDs. Read
-the matches back briefly: "Found Example Manager, Example CEO —
-using these."
+> Who should float to the top of your dashboard as "high priority"?
+> Typically your manager, CEO, or a couple of key stakeholders — DMs
+> and mentions from them will sit in a band above everything else.
+> Mention them by name (e.g. "Jane Doe, Alex Kim"), or type
+> **skip** to set this up later.
 
-If they skip, use an empty list.
+For each name the user gives, call `slack_search_users` and collect
+the user IDs. Read the matches back briefly:
+
+> Found Example Manager, Example CEO — using these.
+
+If the user says "skip", "none", or "later", use an empty list and
+move on. They can re-run `set up slacklens` any time to add or change
+VIPs — all other state is preserved.
 
 ## Step 4 — Write config and dashboard
 
@@ -223,43 +230,80 @@ PY
 Replace the `USER_ID`, `USER_NAME`, `USER_EMAIL`, and `PRIORITY_JSON`
 values with what you collected in Steps 2 and 3.
 
-## Step 5 — Register the auto-refresh schedule
+## Step 5 — Ask about auto-refresh (opt-in, NOT default on)
 
-First, **delete any existing `slacklens-refresh` scheduled task** so re-runs
-of setup pick up the current cron schedule instead of leaving a stale one
-behind:
+Auto-refresh is strictly a convenience — `refresh slacklens` works on
+demand regardless. Do NOT register a scheduled task without the user's
+explicit consent. Some teammates:
+  - Prefer manual control over what their Claude runtime does in the
+    background,
+  - Are on a runtime that doesn't expose a scheduled-tasks MCP at all,
+  - Share the machine and don't want unexpected background jobs.
 
-Call `mcp__scheduled-tasks__delete_scheduled_task` with `taskId:
-slacklens-refresh`. If the tool isn't available or it errors with "not
-found", ignore and continue — this is expected on first install.
+First, **probe availability** — check whether
+`mcp__scheduled-tasks__create_scheduled_task` exists in your tool
+list. If it doesn't, skip this step entirely and tell the user:
 
-Then call `mcp__scheduled-tasks__create_scheduled_task` with these exact
-fields:
+> Your runtime doesn't expose a scheduled-tasks MCP, so there's no
+> auto-refresh option. Just say `refresh slacklens` whenever you
+> want fresh data — takes ~10 seconds.
 
-- `taskId`: `slacklens-refresh`   (kebab-case id; required)
-- `description`: `Refresh the SlackLens dashboard cache every 8 hours.`   (required)
-- `cronExpression`: `0 */8 * * *`   (every 8 hours, on the hour, in local time)
-- `prompt`: `Run the slacklens-refresh skill from the slacklens plugin to refresh the SlackLens dashboard cache.`
+If the MCP IS available, ask the user VERBATIM:
 
-If create still errors with "already exists" (e.g. the delete tool wasn't
-available), catch it and continue — don't fail setup over a re-registration.
+> Want me to register an auto-refresh that runs every 8 hours in the
+> background? You can always turn it off later with `unschedule
+> slacklens`. (yes / no — default **no**; you can always run
+> `refresh slacklens` manually whenever you want the latest data.)
 
-## Step 6 — Trigger the first refresh
+If they answer **yes** (or "sure", "ok", "please do"):
+
+1. Call `mcp__scheduled-tasks__delete_scheduled_task` with `taskId:
+   slacklens-refresh` to clear any stale registration from a prior
+   install. If the delete returns "not found", ignore — expected
+   on first install.
+2. Call `mcp__scheduled-tasks__create_scheduled_task` with:
+   - `taskId`: `slacklens-refresh`
+   - `description`: `Refresh the SlackLens dashboard cache every 8 hours.`
+   - `cronExpression`: `0 */8 * * *`   (every 8h on the hour, local time)
+   - `prompt`: `Run the slacklens-refresh skill from the slacklens plugin to refresh the SlackLens dashboard cache.`
+
+   If this errors with "already exists" (e.g. delete tool was absent),
+   catch it and continue.
+3. Tell the user: "Scheduled. SlackLens will refresh every 8 hours.
+   Say `unschedule slacklens` to turn it off."
+
+If they answer **no** (or "skip", "not now", silence → default no):
+
+Tell the user: "Skipped. Say `refresh slacklens` whenever you want
+the latest data. You can enable auto-refresh later by running `set
+up slacklens` again."
+
+Either way, proceed to Step 6.
+
+## Step 6 — Trigger the first refresh (with one retry)
 
 Run the `slacklens-refresh` skill now (in this same session) so the
 user sees data immediately. Wait for it to finish.
 
-If the refresh fails — typically because the Slack MCP is rate-limited
-from the Step 0 probes — **do not abort setup**. Config, dashboard
-template, and the auto-refresh scheduled task are all already in place;
-the next scheduled tick will pick up. Tell the user clearly:
+If it fails — typically because the Slack MCP is rate-limited from
+the Step 0 probes — **do not abort setup**. Wait ~30 seconds, then
+try one more time:
 
-> Setup is complete, <USER_NAME>, but the first refresh failed:
-> `<error message>`. Say `refresh slacklens` in a minute, or wait for
-> the scheduled refresh.
+```bash
+sleep 30
+```
 
-Then proceed to Step 7 (open the dashboard) regardless — the dashboard
-will render from the empty-cache state and show the empty-state banner.
+Then re-invoke `slacklens-refresh`. If it still fails, leave the
+dashboard empty and tell the user clearly:
+
+> Setup is complete, <USER_NAME>, but the first refresh failed twice:
+> `<error message>`. The Slack MCP is probably rate-limiting you
+> briefly. Say `refresh slacklens` in a minute or two — it almost
+> always works on the next try.
+
+Either way, proceed to Step 7 (open the dashboard) — the dashboard
+will render from the empty-cache state and show the empty-state
+banner if the refresh never succeeded.
 
 ## Step 7 — Open the dashboard
 
@@ -268,19 +312,35 @@ browser (and in any runtime side panel that supports `present_files`).
 
 ## Step 8 — Confirm
 
-Tell the user, in your own words and briefly. Pick one of the two forms
-depending on whether Step 6's refresh succeeded:
+Tell the user, in your own words and briefly. Tailor the message to
+the two axes that actually vary — whether the first refresh
+succeeded, and whether auto-refresh was scheduled.
 
-**If the first refresh succeeded:**
+**Refresh succeeded + auto-refresh scheduled:**
 
 > SlackLens is set up, <USER_NAME>. Dashboard is open and populated.
-> It'll refresh every 8 hours on its own — or say "refresh slack lens"
-> any time.
+> It'll refresh every 8 hours — say `unschedule slacklens` to turn
+> that off, or `refresh slacklens` to force an update now. Say
+> `check slacklens` to verify everything's healthy.
 
-**If the first refresh failed (rate-limit or otherwise):**
+**Refresh succeeded + auto-refresh NOT scheduled:**
 
-> SlackLens is set up, <USER_NAME>, but the dashboard is empty right
-> now — the first refresh failed (`<error summary>`). Wait ~2 minutes
-> for Slack rate limits to clear, then say `refresh slacklens`. The
-> scheduled 8-hour refresh is already registered and will also top it
-> up on its own.
+> SlackLens is set up, <USER_NAME>. Dashboard is open and populated.
+> You're on manual-refresh mode — say `refresh slacklens` whenever
+> you want fresh data. Run `set up slacklens` again later if you
+> decide you want auto-refresh.
+
+**Refresh failed + auto-refresh scheduled:**
+
+> SlackLens is set up, <USER_NAME>, but the first refresh failed
+> (`<error summary>`). Wait ~2 minutes for Slack rate limits to
+> clear, then say `refresh slacklens`. The 8-hour auto-refresh is
+> registered and will also top it up on its own. Say `check
+> slacklens` if things still look off.
+
+**Refresh failed + auto-refresh NOT scheduled:**
+
+> SlackLens is set up, <USER_NAME>, but the first refresh failed
+> (`<error summary>`). Wait ~2 minutes for Slack rate limits to
+> clear, then say `refresh slacklens`. Say `check slacklens` if
+> things still look off.

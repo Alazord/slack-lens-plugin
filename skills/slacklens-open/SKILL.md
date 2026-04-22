@@ -22,9 +22,37 @@ If the file is missing, tell the user:
 
 ## Step 2 — Open in browser
 
+Pick the right opener for the user's OS. Try them in order and stop
+on first success:
+
 ```bash
-open "$HOME/.slacklens/dashboard.html"
+DASH="$HOME/.slacklens/dashboard.html"
+if command -v open >/dev/null 2>&1; then
+  # macOS
+  open "$DASH"
+elif command -v xdg-open >/dev/null 2>&1; then
+  # Linux (requires xdg-utils)
+  xdg-open "$DASH"
+elif command -v wslview >/dev/null 2>&1; then
+  # WSL
+  wslview "$DASH"
+elif [ -n "$BROWSER" ]; then
+  "$BROWSER" "$DASH"
+else
+  echo "NO_OPENER"
+fi
 ```
+
+If the script prints `NO_OPENER`, tell the user the tool did its
+job but their shell has no registered browser launcher — and
+print the file path so they can open it manually:
+
+> No browser opener found on this system (`open` /  `xdg-open` /
+> `wslview` / `$BROWSER`). Open this file manually:
+> `~/.slacklens/dashboard.html`
+
+On Linux, installing `xdg-utils` usually fixes it. On WSL,
+`sudo apt install wslu` ships `wslview`.
 
 ## Step 3 — Also present in a side panel (optional)
 

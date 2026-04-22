@@ -8,8 +8,8 @@
   "plugins": [
     {
       "name": "slacklens",
-      "description": "Personal Slack triage dashboard with channel-grouped view, VIP float, density + theme toggles, and auto-refresh every 8 hours.",
-      "version": "0.4.0",
+      "description": "Personal Slack triage dashboard. VIP band + channels / DMs columns, density + theme toggles, on-demand refresh, optional 8-hour auto-refresh, and a doctor skill to diagnose setup.",
+      "version": "0.5.0",
       "source": "./",
       "author": {
         "name": "Shailendra Singh"

@@ -174,9 +174,46 @@ if len(threads) > 50:
 # wrong freshness labels for non-UTC users.
 data["refreshed_at"] = datetime.now().astimezone().isoformat()
 
-# Re-inject the cache blob into dashboard.html BEFORE writing cache.json,
-# so a regex/parse failure doesn't leave the two files out of sync.
+# Before re-injecting the cache, refresh the dashboard HTML from the
+# plugin's bundled template. This means template / CSS / JS updates shipped
+# in later plugin versions propagate on the user's very next refresh —
+# they don't have to re-run `set up slacklens` just to pick up UI changes.
+# If $CLAUDE_PLUGIN_ROOT isn't set (e.g. running this skill by hand, not
+# via a plugin install), skip the re-copy and use the existing dashboard
+# as-is; the cache re-inject below still runs.
 dash_path = os.path.join(home, "dashboard.html")
+plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT", "").strip()
+if plugin_root:
+    import shutil
+    tmpl = os.path.join(plugin_root, "skills", "slacklens-refresh",
+                        "references", "dashboard.template.html")
+    if os.path.isfile(tmpl):
+        shutil.copy(tmpl, dash_path)
+        # Also re-inject the user's identity + VIPs from config.json,
+        # since the fresh template has empty-string placeholders.
+        cfg = json.load(open(os.path.join(home, "config.json")))
+        user = cfg["user"]
+        priority = cfg.get("priority_people", [])
+        vip_ids   = [p["id"]   for p in priority]
+        vip_names = [p["name"] for p in priority]
+        def _sub_checked(pattern, repl, text, label):
+            new_text, count = re.subn(pattern, repl, text, count=1)
+            if count == 0:
+                raise SystemExit("ERROR: identity substitution failed for "
+                                 + label + " — template placeholder shape "
+                                 "may have changed.")
+            return new_text
+        html_id = open(dash_path, "r", encoding="utf-8").read()
+        html_id = _sub_checked(r"const ME_ID\s*=\s*'[^']*'",
+                               lambda _m: "const ME_ID = "   + json.dumps(user["slack_id"]), html_id, "ME_ID")
+        html_id = _sub_checked(r"const ME_NAME\s*=\s*'[^']*'",
+                               lambda _m: "const ME_NAME = " + json.dumps(user["name"]),     html_id, "ME_NAME")
+        html_id = _sub_checked(r"const VIP_IDS\s*=\s*\[[^\]]*\]",
+                               lambda _m: "const VIP_IDS = "   + json.dumps(vip_ids),   html_id, "VIP_IDS")
+        html_id = _sub_checked(r"const VIP_NAMES\s*=\s*\[[^\]]*\]",
+                               lambda _m: "const VIP_NAMES = " + json.dumps(vip_names), html_id, "VIP_NAMES")
+        open(dash_path, "w", encoding="utf-8").write(html_id)
+
 with open(dash_path, "r", encoding="utf-8") as f:
     html = f.read()
 
