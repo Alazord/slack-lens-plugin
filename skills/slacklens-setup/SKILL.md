@@ -80,7 +80,7 @@ config = {
         "slack_id": os.environ["USER_ID"],
     },
     "priority_people": priority,
-    "auto_refresh_hours": 2,
+    "auto_refresh_hours": 8,
 }
 with open(os.path.join(home_dir, "config.json"), "w") as f:
     json.dump(config, f, indent=2)
@@ -106,17 +106,30 @@ if not os.path.isfile(src):
 dst = os.path.join(home_dir, "dashboard.html")
 shutil.copy(src, dst)
 
-# Inject identity constants into the dashboard
+# Inject identity constants into the dashboard.
+#
+# Two footguns to avoid when substituting user-provided strings into JS:
+# 1. Raw interpolation into single-quoted JS strings breaks on apostrophes
+#    (e.g. a display name like "O'Malley" yields `const ME_NAME = 'O'Malley'`).
+# 2. re.sub with a plain string replacement reinterprets backslash escapes —
+#    a name containing '\1' raises re.error: invalid group reference.
+# json.dumps produces a properly-quoted-and-escaped JSON string literal, which
+# is also valid JS. The lambda form bypasses re.sub's replacement-string escape
+# processing.
 with open(dst, "r", encoding="utf-8") as f:
     html = f.read()
+user_id   = os.environ["USER_ID"]
+user_name = os.environ["USER_NAME"]
+vip_ids   = [p["id"]   for p in priority]
+vip_names = [p["name"] for p in priority]
 html = re.sub(r"const ME_ID\s*=\s*'[^']*'",
-              f"const ME_ID = '{os.environ['USER_ID']}'", html)
+              lambda _m: "const ME_ID = "   + json.dumps(user_id),   html)
 html = re.sub(r"const ME_NAME\s*=\s*'[^']*'",
-              f"const ME_NAME = '{os.environ['USER_NAME']}'", html)
+              lambda _m: "const ME_NAME = " + json.dumps(user_name), html)
 html = re.sub(r"const VIP_IDS\s*=\s*\[[^\]]*\]",
-              f"const VIP_IDS = {json.dumps([p['id']   for p in priority])}", html)
+              lambda _m: "const VIP_IDS = "   + json.dumps(vip_ids),   html)
 html = re.sub(r"const VIP_NAMES\s*=\s*\[[^\]]*\]",
-              f"const VIP_NAMES = {json.dumps([p['name'] for p in priority])}", html)
+              lambda _m: "const VIP_NAMES = " + json.dumps(vip_names), html)
 with open(dst, "w", encoding="utf-8") as f:
     f.write(html)
 
@@ -129,17 +142,24 @@ values with what you collected in Steps 2 and 3.
 
 ## Step 5 — Register the auto-refresh schedule
 
-Call the `create_scheduled_task` tool from the scheduled-tasks MCP
-(full tool name: `mcp__scheduled-tasks__create_scheduled_task`) with these
-exact fields:
+First, **delete any existing `slacklens-refresh` scheduled task** so re-runs
+of setup pick up the current cron schedule instead of leaving a stale one
+behind:
+
+Call `mcp__scheduled-tasks__delete_scheduled_task` with `taskId:
+slacklens-refresh`. If the tool isn't available or it errors with "not
+found", ignore and continue — this is expected on first install.
+
+Then call `mcp__scheduled-tasks__create_scheduled_task` with these exact
+fields:
 
 - `taskId`: `slacklens-refresh`   (kebab-case id; required)
-- `description`: `Refresh the SlackLens dashboard cache every 2 hours.`   (required)
-- `cronExpression`: `0 */2 * * *`   (every 2 hours, on the hour, in local time)
+- `description`: `Refresh the SlackLens dashboard cache every 8 hours.`   (required)
+- `cronExpression`: `0 */8 * * *`   (every 8 hours, on the hour, in local time)
 - `prompt`: `Run the slacklens-refresh skill from the slacklens plugin to refresh the SlackLens dashboard cache.`
 
-If a task with that id already exists, the MCP will error — catch it and
-continue; don't fail setup over a re-registration.
+If create still errors with "already exists" (e.g. the delete tool wasn't
+available), catch it and continue — don't fail setup over a re-registration.
 
 ## Step 6 — Trigger the first refresh
 
@@ -157,4 +177,4 @@ browser AND is presented in Cowork.
 Tell the user (in your own words, briefly):
 
 > SlackLens is set up, <USER_NAME>. Dashboard is open. It'll refresh
-> every 2 hours on its own — or say "refresh slack lens" any time.
+> every 8 hours on its own — or say "refresh slack lens" any time.

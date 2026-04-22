@@ -1,6 +1,6 @@
 # SlackLens (Cowork plugin)
 
-Personal Slack triage dashboard. Mentions, DMs, and active threads in one view, with VIPs floated to the top. Auto-refreshes every 2 hours.
+Personal Slack triage dashboard. Mentions, DMs, and active threads in one view, with VIPs floated to the top. Auto-refreshes every 8 hours.
 
 ## Install (60 seconds)
 
@@ -17,13 +17,13 @@ Personal Slack triage dashboard. Mentions, DMs, and active threads in one view, 
 
 **3. Run setup:** in the same chat, send `set up slacklens`.
 
-The setup skill detects you, asks who to prioritise (your manager, CEO — or skip), registers the 2-hour auto-refresh, and opens the dashboard. Takes about 90 seconds end-to-end.
+The setup skill detects you, asks who to prioritise (your manager, CEO — or skip), registers the 8-hour auto-refresh, and opens the dashboard. Takes about 90 seconds end-to-end.
 
 ## Day to day
 
 - **Open the dashboard** → say `open slacklens` in chat
 - **Force a refresh** → say `refresh slacklens` in chat
-- **Auto-refresh** → runs every 2 hours on its own (registered as a scheduled task)
+- **Auto-refresh** → runs every 8 hours on its own (registered as a scheduled task)
 - **Change priority people** → re-run `set up slacklens`
 
 The dashboard lives at `~/.slacklens/dashboard.html` and is also presented in the Cowork side panel after every refresh.

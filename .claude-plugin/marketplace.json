@@ -3,18 +3,16 @@
   "name": "alazord",
   "description": "Alazord's Cowork plugins — Slack triage and other workflow tools.",
   "owner": {
-    "name": "Shailendra Singh",
-    "email": "shailendra.singh@unifyapps.com"
+    "name": "Shailendra Singh"
   },
   "plugins": [
     {
       "name": "slacklens",
-      "description": "Personal Slack triage dashboard. Mentions, DMs, and active threads in one view, with VIPs floated to the top. Auto-refreshes every 2 hours.",
-      "version": "0.1.1",
+      "description": "Personal Slack triage dashboard. Mentions, DMs, and active threads in one view, with VIPs floated to the top. Auto-refreshes every 8 hours.",
+      "version": "0.2.0",
       "source": "./",
       "author": {
-        "name": "Shailendra Singh",
-        "email": "shailendra.singh@unifyapps.com"
+        "name": "Shailendra Singh"
       }
     }
   ]

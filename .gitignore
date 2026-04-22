@@ -5,6 +5,13 @@
 __pycache__/
 *.pyc
 
+# IDE / editor config (local, per-user)
+.idea/
+.vscode/
+
+# Superpowers brainstorm session data (local, ephemeral)
+.superpowers/
+
 # The packaged .plugin file lives in releases/ or is built on demand
 *.plugin
 

@@ -453,7 +453,7 @@ footer {
           <div class="tasklist-sched"><span class="tid">slack-dashboard-refresh</span><span class="nx">manual</span></div>
         </div>
         <div class="instructions" style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">
-          Refreshed by the <b>slacklens-refresh</b> skill (every 2 hours, or on demand). Click <b>Reload cache</b> to pull the latest on-disk cache.
+          Refreshed by the <b>slacklens-refresh</b> skill (every 8 hours, or on demand). Click <b>Reload cache</b> to pull the latest on-disk cache.
           Run <code>slack-dashboard-refresh</code> to fetch fresh Slack data.
           Status, notes and snoozes are saved locally in your browser.
         </div>
@@ -470,7 +470,7 @@ footer {
 // ---------- Inlined cache (works under file://) ----------
 window.__SLACK_CACHE__ = {
   "refreshed_at": null,
-  "search_results": { "mentions": [], "dms_received": [], "outgoing_dms": [] },
+  "search_results": { "mentions": [], "dms": [], "channels": [] },
   "threads": {}
 };
 // ---------- State ----------
@@ -485,6 +485,10 @@ let raw = null;       // parsed cache JSON
 let items = [];       // normalized list
 let filter = { scope:'all', status:null, query:'', showSnoozed:false };
 let overrides = loadOverrides();
+// Workspace origin (e.g. 'https://example.slack.com'), derived from the
+// first permalink we see in the cache. Falls back to slack.com so the
+// link-out still resolves to Slack's router for unknown workspaces.
+let WORKSPACE_ORIGIN = 'https://slack.com';
 
 function loadOverrides() {
   try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); }
@@ -530,6 +534,7 @@ async function loadCache() {
 function normalize() {
   items = [];
   const seen = new Set();
+  deriveWorkspaceOrigin();
 
   // 1) Threads (richer — have message history)
   const threads = raw.threads || {};
@@ -662,23 +667,34 @@ function prettyChannel(name, id) {
 function projectFromChannel(name) {
   if (!name) return 'Other';
   const n = name.toLowerCase();
-  if (n.includes('keka')) return 'Keka';
-  if (n.includes('copilot-automation')) return 'Copilot Automation';
-  if (n.includes('docebo')) return 'Docebo';
-  if (n.includes('vodafone')) return 'Vodafone';
-  if (n.includes('amn')) return 'AMN';
-  if (n.includes('psg')) return 'PSG';
-  if (n.includes('dda') || n.includes('govgpt')) return 'DDA GovGPT';
-  if (n.includes('boat')) return 'Boat CDP';
-  if (n.includes('ai agent') || n.includes('ai-agent')) return 'AI Agent';
   if (n.startsWith('dm ') || n.startsWith('group dm')) return 'DM';
   return 'Other';
 }
 function deriveThreadPermalink(t, msg) {
   if (msg && msg.permalink) return msg.permalink;
   const ts = (t.thread_ts && t.thread_ts !== 'top_level') ? t.thread_ts : (msg ? msg.ts : '');
-  if (!ts) return `https://unifyapps.slack.com/archives/${t.channel_id}`;
-  return `https://unifyapps.slack.com/archives/${t.channel_id}/p${ts.replace('.','')}`;
+  if (!ts) return `${WORKSPACE_ORIGIN}/archives/${t.channel_id}`;
+  return `${WORKSPACE_ORIGIN}/archives/${t.channel_id}/p${ts.replace('.','')}`;
+}
+// Scan the cache for the first permalink and extract its origin
+// (e.g. 'https://acme.slack.com') so fallback links stay on the right
+// workspace without hardcoding it.
+function deriveWorkspaceOrigin() {
+  const sr = (raw && raw.search_results) || {};
+  const buckets = [sr.mentions, sr.dms, sr.channels, Object.values(raw && raw.threads || {})];
+  for (const bucket of buckets) {
+    if (!bucket) continue;
+    for (const entry of bucket) {
+      const results = entry && (entry.results || entry.messages);
+      if (!results) continue;
+      for (const r of results) {
+        if (r && typeof r.permalink === 'string' && r.permalink.startsWith('http')) {
+          try { WORKSPACE_ORIGIN = new URL(r.permalink).origin; return; }
+          catch (_) { /* ignore malformed */ }
+        }
+      }
+    }
+  }
 }
 function inferStatus({channel_name, lastIsMe, lastText, msgs}) {
   // Heuristics — user's overrides (if any) win at render time.
@@ -774,7 +790,7 @@ function renderGrouped(container, arr, groupBy) {
     groups[g].push(it);
   });
   const order = groupBy === 'project'
-    ? ['🔴 Leadership','Keka','Copilot Automation','DDA GovGPT','Docebo','Vodafone','AMN','Boat CDP','PSG','AI Agent','DM','Other']
+    ? ['🔴 Leadership','DM','Other']
     : groupBy === 'needs_reply'
     ? ['Needs reply','Waiting / Done']
     : STATUSES;
@@ -947,7 +963,7 @@ function setNotice(html, kind) {
 document.getElementById('btnRefresh').addEventListener('click', () => {
   // Plugin variant: there is no local server. The cache lives in
   // ~/.slacklens/dashboard.html and is rewritten by the slacklens-refresh
-  // skill (run automatically every 2 hours, or on demand from Cowork).
+  // skill (run automatically every 8 hours, or on demand from Cowork).
   // The button reloads the page so any fresh cache on disk is picked up,
   // and reminds the user how to force a refresh.
   const btn = document.getElementById('btnRefresh');

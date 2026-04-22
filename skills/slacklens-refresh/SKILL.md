@@ -50,45 +50,45 @@ fetches at 50 in code** (Step 2 enforces this defensively).
   "search_results": {
     "mentions": [
       {
-        "query":   "to:<@U07B1ASMEFJ> after:2026-04-19",
+        "query":   "to:<@U01EXAMPLE99> after:2026-04-19",
         "results": [
           {
-            "channel_id":   "C0AUDUJ9249",
-            "channel_name": "Group DM (Abhishek Khurana, Shailendra Singh, Ankit Jain)",
-            "from_user":    "Ankit Jain (U0A6EU0SC02)",
+            "channel_id":   "C01EXAMPLE00",
+            "channel_name": "Group DM (Alice Example, Jane Doe, Bob Example)",
+            "from_user":    "Alice Example (U01ALICE000)",
             "message_ts":   "1776757696.480349",
             "time":         "2026-04-21 13:18:16 IST",
-            "permalink":    "https://unifyapps.slack.com/archives/C.../p...",
-            "text":         "Checking, batata hu"
+            "permalink":    "https://example.slack.com/archives/C.../p...",
+            "text":         "Hey, can you review this?"
           }
         ]
       }
     ],
     "dms": [
       {
-        "query":   "from:<@U07B1ASMEFJ> after:2026-04-19 channel_types:im,mpim",
+        "query":   "from:<@U01EXAMPLE99> after:2026-04-19 channel_types:im,mpim",
         "note":    "User's outgoing DM messages from last 48h",
         "results": [
           {
-            "channel_id": "C0AUDUJ9249",
-            "from_user":  "Shailendra Singh (U07B1ASMEFJ)",
+            "channel_id": "C01EXAMPLE00",
+            "from_user":  "Jane Doe (U01EXAMPLE99)",
             "message_ts": "1776757683.434379",
             "time":       "2026-04-21 13:18:03 IST",
-            "text":       "Ankit click on the link and use google login"
+            "text":       "Yep, taking a look now."
           }
         ]
       }
     ],
     "channels": [
       {
-        "query":   "<@U07B1ASMEFJ> after:2026-04-19 channel_types:public_channel,private_channel",
+        "query":   "<@U01EXAMPLE99> after:2026-04-19 channel_types:public_channel,private_channel",
         "results": [
           {
-            "channel_id":   "C09PRDNLJ83",
-            "channel_name": "#keka_dev_pm",
-            "from_user":    "Abhishek Khurana (U06CQQ3NPDE)",
+            "channel_id":   "C02EXAMPLE11",
+            "channel_name": "#project-example",
+            "from_user":    "Bob Example (U01BOB00000)",
             "message_ts":   "1776755048.906429",
-            "text":         "add Shailendra Singh (to huddle)"
+            "text":         "add Jane Doe (to huddle)"
           }
         ]
       }
@@ -96,16 +96,16 @@ fetches at 50 in code** (Step 2 enforces this defensively).
   },
   "threads": {
     "<channel_id>:<thread_ts>": {
-      "channel_id":   "C0AUDUJ9249",
+      "channel_id":   "C01EXAMPLE00",
       "channel_name": "Group DM (...)",
       "thread_ts":    "1776757696.480349",
       "messages": [
         {
-          "from":      "Ankit Jain (U0A6EU0SC02)",
+          "from":      "Alice Example (U01ALICE000)",
           "ts":        "1776757696.480349",
           "time":      "2026-04-21 13:18:16 IST",
-          "text":      "Checking, batata hu",
-          "permalink": "https://unifyapps.slack.com/archives/C.../p..."
+          "text":      "Hey, can you review this?",
+          "permalink": "https://example.slack.com/archives/C.../p..."
         }
       ]
     }
@@ -185,9 +185,12 @@ new_json = json.dumps(data, ensure_ascii=False,
                       separators=(",", ":")).replace("</", "<\\/")
 new_assignment = "window.__SLACK_CACHE__ = " + new_json + ";"
 
+# Use a lambda replacement — passing new_assignment directly as a string
+# makes re.sub reinterpret escape sequences like '\n' in the JSON payload
+# as actual newlines, which corrupts the blob and breaks JS parsing.
 updated = re.sub(
     r"window\.__SLACK_CACHE__\s*=\s*\{.*?\};",
-    new_assignment,
+    lambda _m: new_assignment,
     html,
     count=1,
     flags=re.DOTALL,
