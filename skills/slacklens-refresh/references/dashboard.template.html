@@ -45,6 +45,14 @@
   --status-gray: #d6d0bd;
   --status-green: #5a7f5a;
 
+  /* Column tints — subtle accents for the Channels vs DMs split.
+     Accent = visible left-border; bg = ~5% alpha wash behind the card. */
+  --chan-accent: #5a7f8a;   /* cool teal-slate — channel threads */
+  --chan-bg:     #f3f1e8;   /* slightly cooler than surface */
+  --dm-accent:   #a87b5a;   /* warm sienna — 1:1 DMs */
+  --dm-bg:       #f8f3e7;   /* slightly warmer than surface */
+  --vip-band-bg: #f9eeea;   /* faint warm-red wash behind VIP band */
+
   /* Misc */
   --stale-cache-hours: 12;  /* freshness meta turns amber past this */
   --transition-theme: 150ms ease;
@@ -74,6 +82,11 @@
   --status-amber: #d4a33a;
   --status-gray: #4a4539;
   --status-green: #7ea97e;
+  --chan-accent: #6a9aa5;
+  --chan-bg:     #1e1f1d;
+  --dm-accent:   #c79a74;
+  --dm-bg:       #221e19;
+  --vip-band-bg: #2a201d;
 }
 
 /* Follow OS default when no explicit theme is set */
@@ -83,6 +96,9 @@
     --ink: #ede8d6; --ink-muted: #b0a991; --ink-faint: #8a8270;
     --vip-red: #e87b68; --status-red: #e87b68; --status-amber: #d4a33a;
     --status-gray: #4a4539; --status-green: #7ea97e;
+    --chan-accent: #6a9aa5; --chan-bg: #1e1f1d;
+    --dm-accent: #c79a74;   --dm-bg: #221e19;
+    --vip-band-bg: #2a201d;
   }
 }
 
@@ -105,20 +121,85 @@ body {
 * { box-sizing: border-box; }
 
 /* Make [hidden] actually hide elements whose class rules set an explicit
-   display (.sl-panel uses flex, .sl-vip uses inline-block, etc. — without
-   this, hidden gets overridden by class specificity and the element stays
-   visible). This is the canonical fix for the "panel won't close" footgun. */
+   display (.sl-panel uses flex — without this, hidden gets overridden by
+   class specificity and the element stays visible). This is the canonical
+   fix for the "panel won't close" footgun. */
 [hidden] { display: none !important; }
 
 .sl-flow {
   margin-top: 20px;
 }
+
+/* VIP band — full-width, always on top, warm accent */
+.sl-vip-band {
+  position: relative;
+  background: var(--vip-band-bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--vip-red);
+  border-radius: 6px;
+  padding: 10px 14px 12px;
+  margin-bottom: 20px;
+}
+.sl-vip-band::before {
+  content: "★ HIGH PRIORITY";
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--vip-red);
+  margin-bottom: 8px;
+}
+/* Inside the band, render channel cards in a 2-col masonry so dense VIP
+   activity still fits above the fold. */
 @media (min-width: 1024px) {
-  .sl-flow {
-    columns: 2;
-    column-gap: var(--col-gap);
+  .sl-vip-band-inner { columns: 2; column-gap: var(--col-gap); }
+  .sl-vip-band-inner .sl-channel { break-inside: avoid; display: block; }
+}
+
+/* Two-column split: left = channels + group DMs, right = 1:1 DMs */
+.sl-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--col-gap);
+}
+@media (min-width: 1024px) {
+  .sl-grid-2col {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   }
-  .sl-channel { break-inside: avoid; display: block; }
+}
+.sl-col { min-width: 0; }
+.sl-col::before {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-faint);
+}
+.sl-col--channels::before { content: "# CHANNELS"; color: var(--chan-accent); }
+.sl-col--dms::before      { content: "@ DIRECT MESSAGES"; color: var(--dm-accent); }
+.sl-col:empty { display: none; }
+
+/* Per-column channel card tint */
+.sl-col--channels .sl-channel {
+  border-left: 2px solid var(--chan-accent);
+  background: var(--chan-bg);
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+.sl-col--dms .sl-channel {
+  border-left: 2px solid var(--dm-accent);
+  background: var(--dm-bg);
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+.sl-vip-band .sl-channel {
+  background: transparent;
+  padding: 6px 8px;
 }
 
 .sl-footer {
@@ -157,17 +238,6 @@ body {
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
-}
-
-.sl-vip {
-  display: inline-block;
-  margin-left: 6px;
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: var(--fs-xs);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--vip-red);
 }
 
 /* ========================================================================
@@ -625,7 +695,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
     <div class="sl-topbar-right">
       <div id="freshness" class="sl-fresh">0 · loading…</div>
       <button id="themeToggle" class="sl-iconbtn" type="button" aria-label="Toggle theme">☾</button>
-      <button id="reloadBtn" class="sl-reload" type="button">↻ Reload</button>
+      <button id="reloadBtn" class="sl-reload" type="button" title="Re-render from the embedded cache. Run 'refresh slacklens' in Claude for fresh Slack data.">↻ Re-render</button>
     </div>
   </header>
 
@@ -665,8 +735,20 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   <!-- Banner: stale cache / schema mismatch / fetch-failed -->
   <div id="banner" class="sl-banner" hidden></div>
 
-  <!-- Channel flow: all channel groups render here, VIPs floated first -->
-  <main id="channelFlow" class="sl-flow" aria-label="Channels"></main>
+  <!-- Triage layout:
+         1. VIP band (full-width, top) — mentions/DMs/channels tagged VIP
+         2. Two-column grid below:
+              • left  = channels + group DMs (higher signal, don't lose)
+              • right = 1:1 DMs -->
+  <main id="channelFlow" class="sl-flow" aria-label="Triage">
+    <section id="vipBand" class="sl-vip-band" aria-label="High priority" hidden>
+      <div id="vipBandInner" class="sl-vip-band-inner"></div>
+    </section>
+    <div class="sl-grid-2col">
+      <section id="leftCol"  class="sl-col sl-col--channels" aria-label="Channels and group DMs"></section>
+      <section id="rightCol" class="sl-col sl-col--dms"      aria-label="Direct messages"></section>
+    </div>
+  </main>
 
   <!-- Empty state container (shown when nothing renders) -->
   <div id="emptyState" class="sl-empty" hidden></div>
@@ -680,7 +762,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
     <div class="sl-panel-head">
       <div class="sl-panel-title">
         <span id="panelChannel"></span>
-        <span id="panelVip" class="sl-vip" hidden>VIP</span>
       </div>
       <button id="panelClose" class="sl-iconbtn" type="button" aria-label="Close panel">✕</button>
     </div>
@@ -764,36 +845,22 @@ function checkSchemaBanner() {
   }
 }
 
-async function loadCache() {
+// Re-parse + re-render the cache embedded in this file. The dashboard ships
+// as a self-contained file:// artifact; fresh Slack data requires running the
+// `slacklens-refresh` skill, which rewrites the embedded blob. The button is
+// therefore a re-render, not a live fetch.
+function loadCache() {
   clearBanner();
-  // 1) Try a live fetch (works when served over http://)
-  const url = './slack-triage-cache.json?t=' + Date.now();
-  try {
-    const r = await fetch(url, { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    raw = await r.json();
+  if (window.__SLACK_CACHE__) {
+    raw = window.__SLACK_CACHE__;
     normalize();
     checkSchemaBanner();
     render();
     return;
-  } catch (e) {
-    // 2) Fall back to the cache embedded at file generation time.
-    if (window.__SLACK_CACHE__) {
-      raw = window.__SLACK_CACHE__;
-      normalize();
-      checkSchemaBanner();
-      render();
-      // Only show the fetch-failed banner if the user explicitly reloaded and we expected a live fetch.
-      // Under file:// the fallback is the normal path, so suppress by default.
-      if (url.startsWith('http')) {
-        showBanner('warn', 'Showing embedded cache — live refresh failed (' + e.message + ').');
-      }
-      return;
-    }
-    showBanner('warn', 'No cache data available (' + e.message + ').');
-    const f = document.getElementById('freshness');
-    if (f) f.textContent = 'No cache loaded.';
   }
+  showBanner('warn', 'No cache data available.');
+  const f = document.getElementById('freshness');
+  if (f) f.textContent = 'No cache loaded.';
 }
 
 // Normalize mentions + threads into a single item list
@@ -911,6 +978,9 @@ function kindFromChannel(name, id) {
   if (n.startsWith('group dm')) return 'dm';
   return 'channel';
 }
+function isGroupDM(name) {
+  return (name||'').toLowerCase().startsWith('group dm');
+}
 function prettyChannel(name, id) {
   if (!name) return id || '?';
   if (name.toLowerCase().startsWith('dm (')) {
@@ -979,10 +1049,11 @@ function inferStatus({channel_name, lastIsMe, lastText, msgs}) {
 
 // ---------- Rendering ----------
 
-// Group items by channel_id. Returns an array of channel objects ordered:
-//   1. VIP channels (any item is_vip) — latest-activity first among VIPs
-//   2. Non-VIP channels — latest-activity first
-// Each channel: { key, name, display, is_vip, last_time, items: [...] }
+// Group items by channel_id, then split into three buckets:
+//   vip   — VIP channels / DMs / channels containing a VIP mention
+//   left  — non-VIP channels AND non-VIP group DMs (higher signal, left column)
+//   right — non-VIP 1:1 DMs (right column)
+// Each channel: { key, name, display, kind, is_vip, is_group_dm, last_time, items }
 function partitionByChannel(flatItems) {
   const byKey = new Map();
   for (const it of flatItems) {
@@ -991,7 +1062,9 @@ function partitionByChannel(flatItems) {
         key: it.channel_key,
         name: it.channel_name || it.channel_id,
         display: it.channel_display || it.channel_name || it.channel_id,
+        kind: it.kind,
         is_vip: false,
+        is_group_dm: isGroupDM(it.channel_name),
         last_time: '',
         items: [],
       });
@@ -1002,20 +1075,27 @@ function partitionByChannel(flatItems) {
     if ((it.last_time || '') > ch.last_time) ch.last_time = it.last_time;
   }
   const all = Array.from(byKey.values());
-  // items already sorted newest-first in normalize(); preserve that inside each channel.
-  const vip   = all.filter(c =>  c.is_vip).sort((a, b) => b.last_time.localeCompare(a.last_time));
-  const other = all.filter(c => !c.is_vip).sort((a, b) => b.last_time.localeCompare(a.last_time));
-  return vip.concat(other);
+  const byRecency = (a, b) => b.last_time.localeCompare(a.last_time);
+
+  const vip   = all.filter(c => c.is_vip).sort(byRecency);
+  const left  = all.filter(c => !c.is_vip && (c.kind === 'channel' || c.is_group_dm)).sort(byRecency);
+  const right = all.filter(c => !c.is_vip && c.kind === 'dm' && !c.is_group_dm).sort(byRecency);
+  return { vip, left, right, total: all.length };
 }
 
 function render() {
-  const flow = document.getElementById('channelFlow');
-  const empty = document.getElementById('emptyState');
-  if (!flow) return;
-  flow.innerHTML = '';
+  const vipBand   = document.getElementById('vipBand');
+  const vipInner  = document.getElementById('vipBandInner');
+  const leftCol   = document.getElementById('leftCol');
+  const rightCol  = document.getElementById('rightCol');
+  const empty     = document.getElementById('emptyState');
+  if (!vipInner || !leftCol || !rightCol) return;
+  vipInner.innerHTML = '';
+  leftCol.innerHTML = '';
+  rightCol.innerHTML = '';
 
   const shown = applyFilter(items);
-  const channels = partitionByChannel(shown);
+  const parts = partitionByChannel(shown);
 
   // Three empty-state paths
   if (!raw || (!raw.search_results && !raw.threads)) {
@@ -1023,9 +1103,10 @@ function render() {
     empty.innerHTML =
       '<h4>No cache loaded yet</h4>' +
       '<p>Run a refresh to populate the dashboard.</p>' +
-      '<button id="emptyReload" type="button">Reload</button>';
+      '<button id="emptyReload" type="button">Re-render</button>';
     const btn = document.getElementById('emptyReload');
     if (btn) btn.onclick = () => loadCache();
+    vipBand.hidden = true;
     return;
   }
 
@@ -1034,7 +1115,7 @@ function render() {
     (Array.isArray(filter.status) && filter.status.length > 0) ||
     (filter.query || '').trim() !== '';
 
-  if (channels.length === 0 && activelyFiltered) {
+  if (parts.total === 0 && activelyFiltered) {
     empty.hidden = false;
     empty.innerHTML =
       '<h4>Nothing matches</h4>' +
@@ -1052,42 +1133,41 @@ function render() {
       document.querySelectorAll('#statusPills .sl-pill').forEach(b => b.classList.remove('active'));
       render();
     };
+    vipBand.hidden = true;
     return;
   }
 
-  if (channels.length === 0) {
+  if (parts.total === 0) {
     empty.hidden = false;
     empty.innerHTML =
       '<h4>Nothing in the last 48 hours</h4>' +
       '<p>Catch your breath.</p>';
+    vipBand.hidden = true;
     return;
   }
   empty.hidden = true;
 
-  for (const ch of channels) {
-    flow.appendChild(renderChannel(ch));
-  }
+  // VIP band — only show if non-empty
+  vipBand.hidden = parts.vip.length === 0;
+  for (const ch of parts.vip)   vipInner.appendChild(renderChannel(ch, 'vip'));
+  for (const ch of parts.left)  leftCol.appendChild(renderChannel(ch, 'channel'));
+  for (const ch of parts.right) rightCol.appendChild(renderChannel(ch, 'dm'));
 
   updateCounts(shown);
   updateFreshness();
 }
 
-function renderChannel(ch) {
+function renderChannel(ch, colKind) {
   const wrap = document.createElement('section');
   wrap.className = 'sl-channel';
   wrap.dataset.vip = ch.is_vip ? '1' : '0';
+  wrap.dataset.col = colKind || '';
 
   const head = document.createElement('header');
   head.className = 'sl-channel-head';
   const name = document.createElement('div');
   name.className = 'sl-channel-name';
   name.textContent = ch.display;
-  if (ch.is_vip) {
-    const vip = document.createElement('span');
-    vip.className = 'sl-vip';
-    vip.textContent = 'VIP';
-    name.appendChild(vip);
-  }
   head.appendChild(name);
 
   const meta = document.createElement('div');
@@ -1392,7 +1472,7 @@ function bootTheme() {
 
 // ========================================================================
 // Keyboard shortcuts
-//   /  focus search     R  reload       T  cycle theme     D  cycle density
+//   /  focus search     R  re-render    T  cycle theme     D  cycle density
 //   ESC close panel / clear focused input
 //   J/K  next/prev item (nice-to-have)
 // ========================================================================
@@ -1475,8 +1555,6 @@ function openPanel(itemKey, triggerEl) {
 
   const eff = effectiveItem(it);
   document.getElementById('panelChannel').textContent = it.channel_display || it.channel_name || it.channel_id;
-  const vip = document.getElementById('panelVip');
-  vip.hidden = !it.channel_is_vip;
   document.getElementById('panelChannelType').textContent =
     it.kind === 'dm' ? 'Direct message' : (it.kind === 'channel' ? 'Channel' : 'Thread');
   document.getElementById('panelStatus').textContent = eff.status || 'AWAITING YOUR REPLY';
