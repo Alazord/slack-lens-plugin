@@ -154,7 +154,7 @@ In the normalize step, partition channels into `vipChannels` and `otherChannels`
 ### Item row
 
 ```
-│ Abhinav                                              22:30
+│ Jane Doe                                             22:30
 │ ye a gaya office mei?
 │ 16 msgs · Darshan, Raksha +3       (row 3, conditional)
 ```

@@ -630,7 +630,7 @@ document.querySelectorAll('#channelFlow .sl-channel').length
 
 Array.from(document.querySelectorAll('#channelFlow .sl-channel'))
   .map(c => [c.dataset.vip, c.querySelector('.sl-channel-name').firstChild.textContent])
-// → [['1', '@Abhinav Singi'], ['1', '#keka_dev_pm'], ['0', '@Dharmin Patel'], ...]
+// → [['1', '@Jane Doe'], ['1', '#project-example'], ['0', '@John Example'], ...]
 // VIPs (vip="1") appear first, then non-VIPs, each in time-desc order.
 ```
 
