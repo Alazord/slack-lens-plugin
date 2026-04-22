@@ -1,6 +1,6 @@
 {
   "name": "slacklens",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Personal Slack triage dashboard with channel-grouped view, VIP float, density + theme toggles, and auto-refresh every 8 hours.",
   "author": {
     "name": "Shailendra Singh"
