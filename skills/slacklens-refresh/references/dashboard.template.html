@@ -702,11 +702,12 @@ function normalize() {
     });
   }));
 
-  // Sort: needs-reply first, then by time desc
-  items.sort((a,b) => {
-    if (a.needs_reply !== b.needs_reply) return a.needs_reply ? -1 : 1;
-    return (b.last_time || '').localeCompare(a.last_time || '');
+  items.forEach(it => {
+    it.channel_key = it.channel_id;
+    it.channel_is_vip = threadHasVIP(it);
   });
+
+  items.sort((a, b) => (b.last_time || '').localeCompare(a.last_time || ''));
 }
 
 function isMe(s) {
@@ -801,117 +802,141 @@ function inferStatus({channel_name, lastIsMe, lastText, msgs}) {
 }
 
 // ---------- Rendering ----------
-function render() {
-  // Stubbed during redesign — Task 3 replaces this.
-  const flow = document.getElementById('channelFlow');
-  if (flow) flow.textContent = 'Render pending — Task 3 wiring';
-  const f = document.getElementById('freshness');
-  if (f && raw && raw.refreshed_at) f.textContent = raw.refreshed_at;
+
+// Group items by channel_id. Returns an array of channel objects ordered:
+//   1. VIP channels (any item is_vip) — latest-activity first among VIPs
+//   2. Non-VIP channels — latest-activity first
+// Each channel: { key, name, display, is_vip, last_time, items: [...] }
+function partitionByChannel(flatItems) {
+  const byKey = new Map();
+  for (const it of flatItems) {
+    if (!byKey.has(it.channel_key)) {
+      byKey.set(it.channel_key, {
+        key: it.channel_key,
+        name: it.channel_name || it.channel_id,
+        display: it.channel_display || it.channel_name || it.channel_id,
+        is_vip: false,
+        last_time: '',
+        items: [],
+      });
+    }
+    const ch = byKey.get(it.channel_key);
+    ch.items.push(it);
+    if (it.channel_is_vip) ch.is_vip = true;
+    if ((it.last_time || '') > ch.last_time) ch.last_time = it.last_time;
+  }
+  const all = Array.from(byKey.values());
+  // items already sorted newest-first in normalize(); preserve that inside each channel.
+  const vip   = all.filter(c =>  c.is_vip).sort((a, b) => b.last_time.localeCompare(a.last_time));
+  const other = all.filter(c => !c.is_vip).sort((a, b) => b.last_time.localeCompare(a.last_time));
+  return vip.concat(other);
 }
 
-function renderGrouped(container, arr, groupBy) {
-  if (!arr.length) return;
-  const groups = {};
-  arr.forEach(it => {
-    let g;
-    if (groupBy === 'project') {
-      g = threadHasVIP(it) ? '🔴 Leadership' : it.project;
-    } else if (groupBy === 'needs_reply') {
-      g = effectiveItem(it).needs_reply ? 'Needs reply' : 'Waiting / Done';
-    } else {
-      g = effectiveItem(it).status;
-    }
-    groups[g] = groups[g] || [];
-    groups[g].push(it);
-  });
-  const order = groupBy === 'project'
-    ? ['🔴 Leadership','DM','Other']
-    : groupBy === 'needs_reply'
-    ? ['Needs reply','Waiting / Done']
-    : STATUSES;
-  order.filter(g => groups[g]).forEach(g => {
-    const gdiv = document.createElement('div');
-    const isVIPGroup = g === '🔴 Leadership';
-    gdiv.className = 'group' + (isVIPGroup ? ' vip' : '');
-    gdiv.innerHTML = `<div class="group-head${isVIPGroup ? ' vip' : ''}">${escapeHtml(g)}<span class="count">${groups[g].length}</span></div>`;
-    const gi1 = document.createElement('div');
-    gi1.className = 'group-items';
-    if (groups[g].length >= 2) gi1.dataset.multi = '1';
-    groups[g].forEach(it => gi1.appendChild(renderItem(it)));
-    gdiv.appendChild(gi1);
-    container.appendChild(gdiv);
-  });
-  // Any remaining keys not in order
-  Object.keys(groups).filter(g => !order.includes(g)).forEach(g => {
-    const gdiv = document.createElement('div');
-    const isVIPGroup = g === '🔴 Leadership';
-    gdiv.className = 'group' + (isVIPGroup ? ' vip' : '');
-    gdiv.innerHTML = `<div class="group-head${isVIPGroup ? ' vip' : ''}">${escapeHtml(g)}<span class="count">${groups[g].length}</span></div>`;
-    const gi2 = document.createElement('div');
-    gi2.className = 'group-items';
-    groups[g].forEach(it => gi2.appendChild(renderItem(it)));
-    gdiv.appendChild(gi2);
-    container.appendChild(gdiv);
-  });
+function render() {
+  const flow = document.getElementById('channelFlow');
+  const empty = document.getElementById('emptyState');
+  if (!flow) return;
+  flow.innerHTML = '';
+
+  const shown = applyFilter(items);
+  const channels = partitionByChannel(shown);
+
+  if (channels.length === 0) {
+    empty.hidden = false;
+    empty.innerHTML = '<h4>Nothing in the last 48 hours</h4><p>Catch your breath.</p>';
+    return;
+  }
+  empty.hidden = true;
+
+  for (const ch of channels) {
+    flow.appendChild(renderChannel(ch));
+  }
+
+  updateCounts(shown);
+  updateFreshness();
+}
+
+function renderChannel(ch) {
+  const wrap = document.createElement('section');
+  wrap.className = 'sl-channel';
+  wrap.dataset.vip = ch.is_vip ? '1' : '0';
+
+  const head = document.createElement('header');
+  head.className = 'sl-channel-head';
+  const name = document.createElement('div');
+  name.className = 'sl-channel-name';
+  name.textContent = ch.display;
+  if (ch.is_vip) {
+    const vip = document.createElement('span');
+    vip.className = 'sl-vip';
+    vip.textContent = 'VIP';
+    name.appendChild(vip);
+  }
+  head.appendChild(name);
+
+  const meta = document.createElement('div');
+  meta.className = 'sl-channel-meta';
+  const shortTime = (ch.last_time || '').slice(11, 16);  // "HH:MM" from "YYYY-MM-DD HH:MM:SS ..."
+  meta.textContent = ch.items.length > 1
+    ? `${shortTime} · ${ch.items.length}`
+    : shortTime;
+  head.appendChild(meta);
+
+  wrap.appendChild(head);
+  for (const it of ch.items) wrap.appendChild(renderItem(it));
+  return wrap;
 }
 
 function renderItem(it) {
-  const ov = overrideFor(it.key);
-  const eff = effectiveItem(it);
-  const el = document.createElement('div');
-  el.className = 'item';
-  if (ov.snoozed) el.classList.add('snoozed');
-  el.dataset.status = eff.status;
+  const row = document.createElement('article');
+  row.className = 'sl-item';
+  row.dataset.key = it.key;
+  row.dataset.status = (effectiveItem(it).status || 'AWAITING YOUR REPLY').toUpperCase();
 
-  const preview = (it.last_text || it.mention_preview || '').trim();
-  const previewHtml = preview
-    ? `<div class="item-preview"><b>${escapeHtml(it.last_from || '')}:</b> ${escapeHtml(preview)}</div>`
-    : '';
+  const bar = document.createElement('div');
+  bar.className = 'sl-item-bar';
+  row.appendChild(bar);
 
-  const metaBits = [];
-  if (it.msg_count > 1) metaBits.push(`${it.msg_count} msgs`);
-  if (it.participants && it.participants.length) {
-    const others = it.participants.filter(p => !isMe(p)).slice(0,3);
-    if (others.length) metaBits.push(others.join(', '));
+  const body = document.createElement('div');
+  body.className = 'sl-item-body';
+  const head = document.createElement('div');
+  head.className = 'sl-item-head';
+  const from = document.createElement('span');
+  from.className = 'sl-item-from';
+  from.textContent = cleanName(it.last_from || '');
+  const time = document.createElement('span');
+  time.className = 'sl-item-time';
+  time.textContent = (it.last_time || '').slice(11, 16);
+  head.appendChild(from); head.appendChild(time);
+  body.appendChild(head);
+
+  const msg = document.createElement('div');
+  msg.className = 'sl-item-msg';
+  msg.textContent = it.last_text || '';
+  body.appendChild(msg);
+
+  if (it.msg_count > 1 && it.participants && it.participants.length > 1) {
+    const others = it.participants.filter(p => !isMe(p));
+    if (others.length) {
+      const thread = document.createElement('div');
+      thread.className = 'sl-item-thread';
+      const preview = others.slice(0, 2).join(', ');
+      const extra = others.length > 2 ? ` +${others.length - 2}` : '';
+      thread.textContent = `${it.msg_count} msgs · ${preview}${extra}`;
+      body.appendChild(thread);
+    }
   }
-  if (it.my_last_text) metaBits.push(`you said: "${escapeHtml(snip(it.my_last_text, 50))}"`);
+  row.appendChild(body);
+  return row;
+}
 
-  el.innerHTML = `
-    <div class="item-row1">
-      <div class="item-name">
-        <span class="ch">${escapeHtml(it.channel_display)}</span>
-        <span>${escapeHtml(it.last_from || '')}</span>
-      </div>
-      <div class="item-row1-right">
-        <select class="status-select" data-val="${eff.status}">
-          ${STATUSES.map(s => `<option value="${s}" ${s===eff.status?'selected':''}>${s}</option>`).join('')}
-        </select>
-        <span class="item-time">${escapeHtml(formatTime(it.last_time))}</span>
-      </div>
-    </div>
-    ${metaBits.length ? `<div class="item-meta">${metaBits.join(' · ')}</div>` : ''}
-    ${previewHtml}
-    ${ov.note ? `<div class="note-display">📝 ${escapeHtml(ov.note)}</div>` : ''}
-    <div class="item-actions">
-      <a href="${it.permalink}" target="_blank">Open in Slack ↗</a>
-      <button data-act="more" title="More options" style="margin-left:auto;">•••</button>
-    </div>
-  `;
-
-  // Status change
-  el.querySelector('.status-select').addEventListener('change', (e) => {
-    const v = e.target.value;
-    overrideFor(it.key).status = v;
-    // If user sets DONE or WAITING, clear needs_reply; if they set AWAITING/BACKLOG/IN PROGRESS, set it
-    overrideFor(it.key).needs_reply = (v === 'AWAITING YOUR REPLY' || v === 'BACKLOG' || v === 'IN PROGRESS');
-    saveOverrides();
-    render();
-  });
-
-  // More (side panel)
-  el.querySelector('[data-act="more"]').addEventListener('click', () => openPanel(it));
-
-  return el;
+function applyFilter(xs) { return xs; }  // Task 9 implements
+function updateCounts() {}                // Task 9
+function updateFreshness() {              // Task 12 completes
+  const f = document.getElementById('freshness');
+  if (!f || !raw) return;
+  const n = items.length;
+  f.textContent = `${n} · ${raw.refreshed_at || 'unknown'}`;
 }
 
 function effectiveItem(it) {
@@ -921,34 +946,6 @@ function effectiveItem(it) {
     needs_reply: (ov.needs_reply !== undefined) ? ov.needs_reply : it.needs_reply,
     snoozed: !!ov.snoozed,
   };
-}
-
-function passFilter(it) {
-  const eff = effectiveItem(it);
-  if (eff.snoozed && !filter.showSnoozed) return false;
-  if (filter.scope === 'mentions' && it.source !== 'mention' && !it.mention_preview) return false;
-  if (filter.scope === 'awaiting' && !eff.needs_reply) return false;
-  if (filter.scope === 'dm' && it.kind !== 'dm') return false;
-  if (filter.scope === 'channels' && it.kind !== 'channel') return false;
-  if (filter.status && eff.status !== filter.status) return false;
-  if (filter.query) {
-    const q = filter.query.toLowerCase();
-    const hay = (it.channel_display + ' ' + (it.last_from||'') + ' ' + (it.last_text||'') + ' ' + (it.participants||[]).join(' ') + ' ' + it.project).toLowerCase();
-    if (!hay.includes(q)) return false;
-  }
-  return true;
-}
-
-function syncFilterPills() {
-  document.querySelectorAll('.pill[data-scope]').forEach(p => {
-    p.classList.toggle('active', p.dataset.scope === filter.scope);
-  });
-  document.querySelectorAll('.pill[data-status]').forEach(p => {
-    p.classList.toggle('active', filter.status && p.dataset.status === filter.status);
-  });
-  const sn = document.getElementById('showSnoozed');
-  sn.classList.toggle('active', filter.showSnoozed);
-  sn.textContent = filter.showSnoozed ? 'Hide snoozed' : 'Show snoozed';
 }
 
 // ---------- Helpers ----------
