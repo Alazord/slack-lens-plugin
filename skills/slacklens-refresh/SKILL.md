@@ -185,20 +185,23 @@ new_json = json.dumps(data, ensure_ascii=False,
                       separators=(",", ":")).replace("</", "<\\/")
 new_assignment = "window.__SLACK_CACHE__ = " + new_json + ";"
 
-# The regex is anchored on the sentinel comment `// __SLACK_CACHE_END__`
-# rather than the blob's own `};`, so a user message containing the literal
-# substring `};` cannot terminate the non-greedy match early. The template
-# intentionally places that sentinel right after the assignment.
-#
-# Lambda replacement avoids re.sub reinterpreting escape sequences like '\n'
-# in the JSON payload as actual newlines.
+# The regex is anchored two ways:
+#  1. `^` at line start (MULTILINE flag) — so a comment mentioning the
+#     identifier doesn't accidentally match first; only a real top-level
+#     assignment at column 0 qualifies.
+#  2. The sentinel comment on the following line as the terminator — so
+#     a user message containing the JS closing-brace pair cannot end the
+#     non-greedy match early.
+# Lambda replacement avoids re.sub reinterpreting escape sequences like
+# '\n' in the JSON payload as actual newlines.
 SENTINEL = "// __SLACK_CACHE_END__"
+PATTERN = r"^window\.__SLACK_CACHE__\s*=\s*\{.*?\};(\s*\n\s*)" + re.escape(SENTINEL)
 updated = re.sub(
-    r"window\.__SLACK_CACHE__\s*=\s*\{.*?\};(\s*\n\s*)" + re.escape(SENTINEL),
+    PATTERN,
     lambda _m: new_assignment + _m.group(1) + SENTINEL,
     html,
     count=1,
-    flags=re.DOTALL,
+    flags=re.DOTALL | re.MULTILINE,
 )
 
 if updated == html:
@@ -210,8 +213,8 @@ if updated == html:
 # broken dashboard. (Belt-and-braces: json.dumps produced it, so this should
 # always pass — but the check is cheap and catches any future regex edits
 # that accidentally swallow a trailing character.)
-m = re.search(r"window\.__SLACK_CACHE__\s*=\s*(\{.*?\});(\s*\n\s*)" + re.escape(SENTINEL),
-              updated, flags=re.DOTALL)
+m = re.search(r"^window\.__SLACK_CACHE__\s*=\s*(\{.*?\});(\s*\n\s*)" + re.escape(SENTINEL),
+              updated, flags=re.DOTALL | re.MULTILINE)
 if not m:
     raise SystemExit("ERROR: post-inject readback failed to find the blob")
 try:

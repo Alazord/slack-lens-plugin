@@ -786,11 +786,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 
 <script>
 // ---------- Inlined cache (works under file://) ----------
-// The refresh/setup skills rewrite the assignment below by regexing from
-// "window.__SLACK_CACHE__ = {" up to the next "// __SLACK_CACHE_END__"
-// sentinel. The sentinel is load-bearing: without it, a non-greedy match
-// on `};` could terminate early inside a user message that contains "};"
-// and silently corrupt the embedded blob. Do not remove.
+// The cache-blob sentinel on the line AFTER the assignment below is
+// load-bearing. Do not remove it. Refresh/setup use it as the regex
+// terminator so a user message containing the JS closing-brace pair
+// cannot end the non-greedy match early. (This comment intentionally
+// avoids naming the assignment's identifier or the sentinel text so
+// that the regex does not match inside the comment itself.)
 window.__SLACK_CACHE__ = {
   "refreshed_at": null,
   "search_results": { "mentions": [], "dms": [], "channels": [] },
