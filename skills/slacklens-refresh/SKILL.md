@@ -226,8 +226,14 @@ Call the `present_files` tool from the cowork MCP with the path
 panel.
 
 If `present_files` is unavailable in this session (e.g. when running
-from a scheduled task), skip — the cache is still on disk and the
-browser tab (if open) will pick it up on next reload.
+from a scheduled task), emit a one-line note to the chat output —
+**do not silently skip**:
+
+> Cowork `present_files` not available in this session — dashboard is
+> still on disk at `~/.slacklens/dashboard.html`; open it manually or
+> reload an existing browser tab.
+
+Then continue to Step 4.
 
 ## Step 4 — Report
 

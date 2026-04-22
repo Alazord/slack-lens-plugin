@@ -32,7 +32,13 @@ Call the `present_files` tool from the cowork MCP with the path
 `~/.slacklens/dashboard.html` so the dashboard is also available in
 the Cowork side panel.
 
-If `present_files` is unavailable, skip — the browser tab is enough.
+If `present_files` is unavailable, emit this one-line note —
+**do not silently skip**:
+
+> Cowork `present_files` not available — dashboard opened in your
+> browser only.
+
+Then continue to Step 4.
 
 ## Step 4 — Confirm
 
