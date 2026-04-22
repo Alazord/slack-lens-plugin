@@ -40,6 +40,36 @@ Everything is a Cowork skill — there's no local server, no port, no launchd jo
 
 State lives in `~/.slacklens/`: `config.json`, `cache.json`, `dashboard.html`. Wipe that folder to factory-reset.
 
+## What SlackLens has access to
+
+SlackLens asks for a tight, fixed set of permissions during setup.
+It never writes to Slack. It only reads your mentions, DMs, and
+threads. It never sends messages on your behalf.
+
+**Slack (read-only):**
+- `slack_read_user_profile` — to detect who you are.
+- `slack_search_users` — to look up the people you mark as priority.
+- `slack_search_public_and_private` — to find your mentions/DMs.
+- `slack_read_thread` — to show you the thread you were mentioned in.
+
+**Local filesystem:**
+- Writes `~/.slacklens/config.json`, `~/.slacklens/cache.json`,
+  `~/.slacklens/dashboard.html`.
+- Writes `/tmp/slacklens-refresh.json` during refresh (intermediate,
+  auto-cleaned).
+- Writes one allowlist entry set to `~/.claude/settings.json` on
+  first setup.
+
+**Shell:**
+- `mkdir`, `python3`, `open`, `test`, `[` — all scoped to the narrow
+  subcommands the skills actually call.
+
+**Scheduled tasks:**
+- Registers one task, `slacklens-refresh`, running every 8 hours.
+
+**To revoke everything SlackLens was granted:** run `/permissions` in
+chat and remove the entries, or edit `~/.claude/settings.json` directly.
+
 ## Updating
 
 To pick up new versions, either:
@@ -58,3 +88,6 @@ The `version` field in `.claude-plugin/plugin.json` bumps on every release.
 | Dashboard shows old data | Say `refresh slacklens` |
 | Dashboard is blank or "No cache loaded" | Say `refresh slacklens`. If still blank, `rm -rf ~/.slacklens/` and re-run setup |
 | "Marketplace file not found" when adding marketplace | Your clone is stale — `rm -rf ~/.claude/plugins/marketplaces/Alazord-slack-lens-plugin/` and retry |
+| Setup asks for several permissions in a row | Expected on first run. Approve "always allow" for each. Subsequent refreshes run silently. |
+| Teammate on Linux/WSL — `open slacklens` does nothing | Install `xdg-utils` or set `$BROWSER`. The dashboard still lives at `~/.slacklens/dashboard.html`. |
+| Want to revoke what SlackLens was granted | Run `/permissions` in chat, or edit `~/.claude/settings.json` and remove SlackLens's entries (they start with `Bash(mkdir:*)` or `mcp__claude_ai_Slack__*`). |
