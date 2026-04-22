@@ -949,7 +949,32 @@ function setNotice(html, kind) {
   // (old id 'notice' is gone; new id is 'banner')
 }
 
+// ========================================================================
+// Density toggle (slacklens.density: 'compact' | 'balanced' | 'spacious')
+// ========================================================================
+const DENSITY_KEY = 'slacklens.density';
+const DENSITY_VALUES = ['compact', 'balanced', 'spacious'];
+
+function applyDensity(d) {
+  if (!DENSITY_VALUES.includes(d)) d = 'balanced';
+  document.documentElement.setAttribute('data-density', d);
+  document.querySelectorAll('.sl-density-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.density === d);
+  });
+  try { localStorage.setItem(DENSITY_KEY, d); } catch (_) {}
+}
+
+function bootDensity() {
+  let d;
+  try { d = localStorage.getItem(DENSITY_KEY); } catch (_) { d = null; }
+  applyDensity(d || 'balanced');
+  document.querySelectorAll('.sl-density-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyDensity(btn.dataset.density));
+  });
+}
+
 // ---------- Wire up ----------
+bootDensity();
 loadCache();
 
 // ── Side panel — stubs; wired in Task 3 ──
