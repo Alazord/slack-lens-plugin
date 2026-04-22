@@ -156,7 +156,7 @@ In the normalize step, partition channels into `vipChannels` and `otherChannels`
 ```
 │ Jane Doe                                             22:30
 │ ye a gaya office mei?
-│ 16 msgs · Darshan, Raksha +3       (row 3, conditional)
+│ 16 msgs · Alice, Bob +3            (row 3, conditional)
 ```
 
 - **Grid**: 2px status bar + content column.
