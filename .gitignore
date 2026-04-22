@@ -12,6 +12,9 @@ __pycache__/
 # Superpowers brainstorm session data (local, ephemeral)
 .superpowers/
 
+# Claude Code session data (local, ephemeral)
+.claude/
+
 # The packaged .plugin file lives in releases/ or is built on demand
 *.plugin
 
