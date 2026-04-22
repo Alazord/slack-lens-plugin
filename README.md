@@ -32,12 +32,11 @@ The dashboard lives at `~/.slacklens/dashboard.html` and is also presented in th
 
 ## How it works
 
-Everything is a Cowork skill — there's no local server, no port, no launchd job. The plugin ships four skills:
+Everything is a Cowork skill — there's no local server, no port, no launchd job. The plugin ships three skills:
 
 - `slacklens-setup` — one-time identity + VIP setup
 - `slacklens-refresh` — pulls the last 48h of mentions/DMs from Slack via the Slack MCP, writes the cache, rebuilds the dashboard HTML
 - `slacklens-open` — opens the dashboard in your browser and presents it in Cowork
-- `slacklens-rerender` — re-parses the existing cache into the dashboard without hitting Slack (useful for template/CSS iteration)
 
 State lives in `~/.slacklens/`: `config.json`, `cache.json`, `dashboard.html`. Wipe that folder to factory-reset.
 
