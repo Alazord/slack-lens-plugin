@@ -5,18 +5,29 @@ description: One-time setup for the SlackLens dashboard. Detects the connected S
 
 You are running the one-time setup for SlackLens for this user.
 
-## Step 0 — Verify Slack MCP is connected
+## Step 0 — Verify Slack MCP is connected and has the tools we need
 
-Make a no-op call such as `slack_search_users` with a single-letter query
-("a", limit 1). If the call errors with "MCP not connected", "tool not
-found", or any auth error, STOP and tell the user:
+SlackLens uses four read-only Slack MCP tools. Probe each once to make
+sure the connector is live AND modern enough. Run these four calls,
+ignoring their actual return values — we only care whether each one
+*exists*:
 
-> SlackLens needs the Slack MCP to be connected before setup can run.
+1. `slack_search_users` with query `"a"`, limit 1.
+2. `slack_read_user_profile` with no arguments.
+3. `slack_search_public_and_private` with query `"a"`, limit 1.
+4. `slack_read_thread` with a clearly-invalid `channel_id: "C0"` and `thread_ts: "0"` — the tool may return an error about the bad arguments, which is fine; that still proves the tool is wired up. A "tool not found" or "MCP not connected" error is NOT fine.
+
+For each call, if it fails with "MCP not connected", "tool not found",
+"unknown tool", or any auth error, STOP and tell the user:
+
+> SlackLens needs the Slack MCP (a recent version) to be connected
+> before setup can run. The `<tool name>` tool is missing or the
+> connector is not authorised.
 >
-> Open Cowork → Settings → Connectors → Slack → Connect, then send
-> "set up slack lens" again.
+> Open Cowork → Settings → Connectors → Slack → Connect, make sure
+> it's up to date, then send "set up slack lens" again.
 
-Do not try to continue if Slack MCP is unreachable.
+Do not try to continue if any of the four probes fails this way.
 
 ## Step 0.5 — Pre-approve SlackLens's permissions
 
