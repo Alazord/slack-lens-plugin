@@ -395,19 +395,6 @@ body {
 }
 .sl-iconbtn:hover { color: var(--ink); }
 
-.sl-reload {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--ink);
-  font-family: inherit;
-  font-size: var(--fs-sm);
-  font-weight: 500;
-  cursor: pointer;
-}
-
 /* ========================================================================
    Toolbar
    ======================================================================== */
@@ -695,7 +682,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
     <div class="sl-topbar-right">
       <div id="freshness" class="sl-fresh">0 · loading…</div>
       <button id="themeToggle" class="sl-iconbtn" type="button" aria-label="Toggle theme">☾</button>
-      <button id="reloadBtn" class="sl-reload" type="button" title="Re-render from the embedded cache. Run 'refresh slacklens' in Claude for fresh Slack data.">↻ Re-render</button>
     </div>
   </header>
 
@@ -853,10 +839,10 @@ function checkSchemaBanner() {
   }
 }
 
-// Re-parse + re-render the cache embedded in this file. The dashboard ships
-// as a self-contained file:// artifact; fresh Slack data requires running the
-// `slacklens-refresh` skill, which rewrites the embedded blob. The button is
-// therefore a re-render, not a live fetch.
+// Parse the cache embedded in this file and render. The dashboard ships as
+// a self-contained file:// artifact; fresh Slack data requires running the
+// `slacklens-refresh` skill, which rewrites the embedded blob in place.
+// A browser refresh then re-reads the file and re-runs this function.
 function loadCache() {
   clearBanner();
   if (window.__SLACK_CACHE__) {
@@ -1341,9 +1327,6 @@ function bootFilters() {
   // Show snoozed
   const snz = document.getElementById('showSnoozed');
   if (snz) snz.addEventListener('change', () => { filter.showSnoozed = snz.checked; render(); });
-  // Reload button
-  const reload = document.getElementById('reloadBtn');
-  if (reload) reload.addEventListener('click', () => loadCache());
 }
 const STALE_CACHE_HOURS = 12;
 
@@ -1450,7 +1433,7 @@ function bootTheme() {
 
 // ========================================================================
 // Keyboard shortcuts
-//   /  focus search     R  re-render    T  cycle theme     D  cycle density
+//   /  focus search     T  cycle theme     D  cycle density
 //   ESC close panel / clear focused input
 //   J/K  next/prev item (nice-to-have)
 // ========================================================================
@@ -1467,7 +1450,6 @@ function bootKeyboard() {
     if (inInput) return;
 
     if (e.key === '/') { e.preventDefault(); const si = document.getElementById('searchInput'); if (si) si.focus(); return; }
-    if (e.key === 'r' || e.key === 'R') { e.preventDefault(); loadCache(); return; }
     if (e.key === 't' || e.key === 'T') {
       e.preventDefault();
       const current = localStorage.getItem(THEME_KEY) || 'auto';
