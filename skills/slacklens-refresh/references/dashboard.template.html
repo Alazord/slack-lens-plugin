@@ -786,11 +786,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 
 <script>
 // ---------- Inlined cache (works under file://) ----------
+// The refresh/setup skills rewrite the assignment below by regexing from
+// "window.__SLACK_CACHE__ = {" up to the next "// __SLACK_CACHE_END__"
+// sentinel. The sentinel is load-bearing: without it, a non-greedy match
+// on `};` could terminate early inside a user message that contains "};"
+// and silently corrupt the embedded blob. Do not remove.
 window.__SLACK_CACHE__ = {
   "refreshed_at": null,
   "search_results": { "mentions": [], "dms": [], "channels": [] },
   "threads": {}
 };
+// __SLACK_CACHE_END__
+
 // ---------- State ----------
 const LS_KEY = 'slackTriageOverrides.v1';
 const STATUSES = ['AWAITING YOUR REPLY','BACKLOG','IN PROGRESS','WAITING','DISCUSSION','DONE'];
@@ -884,6 +891,9 @@ function normalize() {
     const lastIsMe = last ? isMe(last.from) : false;
     const lastText = last ? last.text : '';
     const lastTime = last ? last.time : '';
+    // Slack `ts` is a numeric epoch string — reliable for sorting regardless
+    // of the timezone suffix on `last_time` ("IST", "PST" etc).
+    const lastTs   = last ? (+last.ts || 0) : 0;
 
     const derived = inferStatus({
       channel_name: t.channel_name,
@@ -901,12 +911,11 @@ function normalize() {
       last_is_me: lastIsMe,
       last_text: lastText,
       last_time: lastTime,
+      last_ts: lastTs,
       msg_count: msgs.length,
       participants: Array.from(new Set(msgs.map(m => cleanName(m.from)))).filter(Boolean),
-      my_last_text: (msgs.slice().reverse().find(m => isMe(m.from)) || {}).text || '',
       status: derived.status,
       needs_reply: derived.needs_reply,
-      project: projectFromChannel(t.channel_name),
       source: 'thread',
     });
   });
@@ -915,14 +924,9 @@ function normalize() {
   const mentionsQueries = (raw.search_results && raw.search_results.mentions) || [];
   mentionsQueries.forEach(q => (q.results || []).forEach(m => {
     if (!m.permalink) return;
-    const threadURL = m.permalink.split('?')[0];
     // If we already have a thread whose key matches this channel, skip duplicating
     const existing = items.find(it => it.channel_id === m.channel_id);
-    if (existing) {
-      // attach mention text as hint if newer
-      if (!existing.mention_preview) existing.mention_preview = m.text;
-      return;
-    }
+    if (existing) return;
     if (seen.has(m.permalink)) return; seen.add(m.permalink);
     items.push({
       key: m.permalink,
@@ -935,12 +939,11 @@ function normalize() {
       last_is_me: isMe(m.from_user),
       last_text: m.text,
       last_time: m.time,
+      last_ts: +m.message_ts || 0,
       msg_count: 1,
       participants: [cleanName(m.from_user)].filter(Boolean),
-      my_last_text: '',
       status: 'AWAITING YOUR REPLY',
       needs_reply: !isMe(m.from_user),
-      project: projectFromChannel(m.channel_name),
       source: 'mention',
     });
   }));
@@ -950,7 +953,7 @@ function normalize() {
     it.channel_is_vip = threadHasVIP(it);
   });
 
-  items.sort((a, b) => (b.last_time || '').localeCompare(a.last_time || ''));
+  items.sort((a, b) => (b.last_ts || 0) - (a.last_ts || 0));
 }
 
 // Escape a string so it can be embedded safely in a RegExp source.
@@ -1015,12 +1018,6 @@ function prettyChannel(name, id) {
   }
   return '#' + name.replace(/^#/,'');
 }
-function projectFromChannel(name) {
-  if (!name) return 'Other';
-  const n = name.toLowerCase();
-  if (n.startsWith('dm ') || n.startsWith('group dm')) return 'DM';
-  return 'Other';
-}
 function deriveThreadPermalink(t, msg) {
   if (msg && msg.permalink) return msg.permalink;
   const ts = (t.thread_ts && t.thread_ts !== 'top_level') ? t.thread_ts : (msg ? msg.ts : '');
@@ -1067,7 +1064,7 @@ function inferStatus({channel_name, lastIsMe, lastText, msgs}) {
 //   vip   — VIP channels / DMs / channels containing a VIP mention
 //   left  — non-VIP channels AND non-VIP group DMs (higher signal, left column)
 //   right — non-VIP 1:1 DMs (right column)
-// Each channel: { key, name, display, kind, is_vip, is_group_dm, last_time, items }
+// Each channel: { key, name, display, kind, is_vip, is_group_dm, last_ts, last_time, items }
 function partitionByChannel(flatItems) {
   const byKey = new Map();
   for (const it of flatItems) {
@@ -1079,6 +1076,7 @@ function partitionByChannel(flatItems) {
         kind: it.kind,
         is_vip: false,
         is_group_dm: isGroupDM(it.channel_name),
+        last_ts: 0,
         last_time: '',
         items: [],
       });
@@ -1086,10 +1084,13 @@ function partitionByChannel(flatItems) {
     const ch = byKey.get(it.channel_key);
     ch.items.push(it);
     if (it.channel_is_vip) ch.is_vip = true;
-    if ((it.last_time || '') > ch.last_time) ch.last_time = it.last_time;
+    if ((it.last_ts || 0) > ch.last_ts) {
+      ch.last_ts = it.last_ts;
+      ch.last_time = it.last_time;  // kept for display only
+    }
   }
   const all = Array.from(byKey.values());
-  const byRecency = (a, b) => b.last_time.localeCompare(a.last_time);
+  const byRecency = (a, b) => (b.last_ts || 0) - (a.last_ts || 0);
 
   const vip   = all.filter(c => c.is_vip).sort(byRecency);
   const left  = all.filter(c => !c.is_vip && (c.kind === 'channel' || c.is_group_dm)).sort(byRecency);
@@ -1116,10 +1117,8 @@ function render() {
     empty.hidden = false;
     empty.innerHTML =
       '<h4>No cache loaded yet</h4>' +
-      '<p>Run a refresh to populate the dashboard.</p>' +
-      '<button id="emptyReload" type="button">Re-render</button>';
-    const btn = document.getElementById('emptyReload');
-    if (btn) btn.onclick = () => loadCache();
+      '<p>Say <code>refresh slacklens</code> in Claude to populate this dashboard. ' +
+      'Refreshing the page won\'t help — the embedded cache is still empty.</p>';
     vipBand.hidden = true;
     return;
   }
@@ -1376,44 +1375,8 @@ function effectiveItem(it) {
     status: ov.status || it.status,
     needs_reply: (ov.needs_reply !== undefined) ? ov.needs_reply : it.needs_reply,
     snoozed: !!ov.snoozed,
+    note: ov.note || '',
   };
-}
-
-// ---------- Helpers ----------
-function sumResults(raw, key) {
-  const qs = (raw && raw.search_results && raw.search_results[key]) || [];
-  return qs.reduce((n, q) => n + ((q.results||[]).length), 0);
-}
-function fmtHuman(iso) {
-  if (!iso) return iso;
-  const d = new Date(iso);
-  if (isNaN(d)) return iso;
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const pad = n => String(n).padStart(2,'0');
-  return `${pad(d.getDate())} ${months[d.getMonth()]}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-function fmtRelative(iso) {
-  const then = Date.parse(iso);
-  if (isNaN(then)) return iso;
-  const diff = (Date.now() - then) / 1000;
-  if (diff < 60) return 'just now';
-  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
-  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
-  return Math.floor(diff/86400) + 'd ago';
-}
-function formatTime(t) {
-  if (!t) return '';
-  // "2026-04-21 13:18:16 IST" → "13:18 · 21 Apr"
-  const m = t.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
-  if (!m) return t;
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${m[4]}:${m[5]} · ${parseInt(m[3],10)} ${months[parseInt(m[2],10)-1]}`;
-}
-function snip(s, n) {
-  s = (s||'').trim(); if (s.length <= n) return s; return s.slice(0,n) + '…';
-}
-function escapeHtml(s) {
-  return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 // ========================================================================
