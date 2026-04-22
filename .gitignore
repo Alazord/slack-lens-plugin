@@ -20,4 +20,6 @@ __pycache__/
 
 # Dev-only — don't ship to teammates
 skills/slacklens-rerender/
+scripts/dev-rebuild.py
+docs/superpowers/
 fixtures/
