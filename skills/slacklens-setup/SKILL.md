@@ -249,7 +249,19 @@ browser AND is presented in Cowork.
 
 ## Step 8 — Confirm
 
-Tell the user (in your own words, briefly):
+Tell the user, in your own words and briefly. Pick one of the two forms
+depending on whether Step 6's refresh succeeded:
 
-> SlackLens is set up, <USER_NAME>. Dashboard is open. It'll refresh
-> every 8 hours on its own — or say "refresh slack lens" any time.
+**If the first refresh succeeded:**
+
+> SlackLens is set up, <USER_NAME>. Dashboard is open and populated.
+> It'll refresh every 8 hours on its own — or say "refresh slack lens"
+> any time.
+
+**If the first refresh failed (rate-limit or otherwise):**
+
+> SlackLens is set up, <USER_NAME>, but the dashboard is empty right
+> now — the first refresh failed (`<error summary>`). Wait ~2 minutes
+> for Slack rate limits to clear, then say `refresh slacklens`. The
+> scheduled 8-hour refresh is already registered and will also top it
+> up on its own.

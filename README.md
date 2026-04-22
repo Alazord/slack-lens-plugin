@@ -32,11 +32,12 @@ The dashboard lives at `~/.slacklens/dashboard.html` and is also presented in th
 
 ## How it works
 
-Everything is a Cowork skill — there's no local server, no port, no launchd job. The plugin ships three skills:
+Everything is a Cowork skill — there's no local server, no port, no launchd job. The plugin ships four skills:
 
 - `slacklens-setup` — one-time identity + VIP setup
 - `slacklens-refresh` — pulls the last 48h of mentions/DMs from Slack via the Slack MCP, writes the cache, rebuilds the dashboard HTML
 - `slacklens-open` — opens the dashboard in your browser and presents it in Cowork
+- `slacklens-rerender` — re-parses the existing cache into the dashboard without hitting Slack (useful for template/CSS iteration)
 
 State lives in `~/.slacklens/`: `config.json`, `cache.json`, `dashboard.html`. Wipe that folder to factory-reset.
 
@@ -89,6 +90,7 @@ The `version` field in `.claude-plugin/plugin.json` bumps on every release.
 | Dashboard is blank or "No cache loaded" | Say `refresh slacklens`. If still blank, `rm -rf ~/.slacklens/` and re-run setup |
 | "Marketplace file not found" when adding marketplace | Your clone is stale — `rm -rf ~/.claude/plugins/marketplaces/Alazord-slack-lens-plugin/` and retry |
 | Setup asks for several permissions in a row | Expected on first run. Approve "always allow" for each. Subsequent refreshes run silently. |
+| You denied the Step 0.5 permission prompt and setup aborted | Re-run `set up slacklens` and approve the write to `~/.claude/settings.json`. Without it, every refresh will re-prompt for the underlying tools. |
 | Teammate on Linux/WSL — `open slacklens` does nothing | Install `xdg-utils` or set `$BROWSER`. The dashboard still lives at `~/.slacklens/dashboard.html`. |
 | Want to revoke what SlackLens was granted | Run `/permissions` in chat, or edit `~/.claude/settings.json` and remove SlackLens's entries (they start with `Bash(mkdir:*)` or `mcp__claude_ai_Slack__*`). |
 
