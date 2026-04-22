@@ -273,6 +273,162 @@ body {
   border-radius: 6px;
   cursor: pointer;
 }
+
+/* ========================================================================
+   Topbar
+   ======================================================================== */
+.sl-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid var(--border-faint);
+  margin-bottom: 12px;
+}
+.sl-brand {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--fs-lg);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.sl-topbar-right { display: flex; gap: 14px; align-items: center; }
+.sl-fresh {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.sl-fresh[data-stale="1"] { color: var(--status-amber); }
+
+.sl-iconbtn {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-family: inherit;
+}
+.sl-iconbtn:hover { color: var(--ink); }
+
+.sl-reload {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* ========================================================================
+   Toolbar
+   ======================================================================== */
+.sl-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 4px;
+  flex-wrap: wrap;
+}
+.sl-pills { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.sl-divider { width: 1px; height: 20px; background: var(--border); }
+.sl-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border-faint);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.sl-pill .count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.sl-pill.active {
+  background: var(--ink);
+  color: var(--surface);
+  border-color: var(--ink);
+}
+.sl-pill.active .count { color: var(--surface); opacity: 0.7; }
+
+.sl-search {
+  flex: 1 1 220px; min-width: 180px; max-width: 320px;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-faint);
+}
+.sl-search .icon { color: var(--ink-faint); font-size: 13px; }
+.sl-search input {
+  flex: 1; border: 0; background: transparent; outline: 0;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+.sl-search input::placeholder { color: var(--ink-faint); }
+
+.sl-density {
+  display: inline-flex;
+  background: var(--surface-2);
+  border: 1px solid var(--border-faint);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.sl-density-btn {
+  border: 0;
+  background: transparent;
+  padding: 4px 10px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.sl-density-btn.active { background: var(--ink); color: var(--surface); }
+
+.sl-switch {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.sl-switch input { display: none; }
+.sl-switch .track {
+  width: 26px; height: 14px;
+  background: var(--border);
+  border-radius: 999px;
+  position: relative;
+}
+.sl-switch .track::after {
+  content: "";
+  position: absolute; top: 2px; left: 2px;
+  width: 10px; height: 10px;
+  background: var(--surface);
+  border-radius: 50%;
+  transition: transform 120ms;
+}
+.sl-switch input:checked + .track { background: var(--ink); }
+.sl-switch input:checked + .track::after { transform: translateX(12px); }
+
+/* Focus rings (accessibility) */
+button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
 </style>
 </head>
 <body>
