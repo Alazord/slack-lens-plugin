@@ -51,10 +51,10 @@ python3 "$SCRIPT" --root "$TMPDIR" >/dev/null 2>&1
 check "placeholder IDs allowed" 0 $?
 rm "$TMPDIR/p.txt"
 
-# Test 6: author-name carve-out
+# Test 6: author name 'Shailendra' is NOT in the colleagues regex (absence, not carve-out)
 echo '"author": {"name": "Shailendra Singh"}' > "$TMPDIR/ok.txt"
 python3 "$SCRIPT" --root "$TMPDIR" >/dev/null 2>&1
-check "Shailendra Singh (author) allowed" 0 $?
+check "author name not flagged (intentional absence from colleagues regex)" 0 $?
 rm "$TMPDIR/ok.txt"
 
 # Test 7: colleague name leak → rc 1

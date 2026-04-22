@@ -46,6 +46,7 @@ PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("email",       re.compile(r"shailendra\.singh@unifyapps\.com", re.IGNORECASE)),
     ("workspace",   re.compile(r"unifyapps\.slack\.com",             re.IGNORECASE)),
     ("real_id",     re.compile(r"\bU0[A-Z0-9]{8,10}\b")),
+    # Colleagues list. Intentionally excludes "Shailendra" — that's the plugin author.
     ("colleagues",  re.compile(
         r"\b(Abhinav|Ankit|Abhishek|Dharmin|Divyam|Samarth|Darshan|"
         r"Raksha|Ishu|Akhila|Nilesh|Rahul|Anuj|Dhruv|Mudit|Nirav|Thanusha)\b"
@@ -60,7 +61,6 @@ PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 # Whole-match exemptions (checked after a pattern fires).
 PLACEHOLDER_IDS = {"U01EXAMPLE99", "U02EXAMPLE11", "U01ALICE000", "U01BOB00000"}
-AUTHOR_NAME_LITERAL = "Shailendra Singh"
 
 
 def is_text_file(path: Path, sample_size: int = 4096) -> bool:
@@ -92,10 +92,6 @@ def line_is_exempt(line: str, pattern_name: str, match: re.Match) -> bool:
     """Apply carve-outs that the raw regex can't express."""
     if pattern_name == "real_id" and match.group(0) in PLACEHOLDER_IDS:
         return True
-    # Only carve out colleague-name 'Shailendra' when it's part of the author
-    # literal ("Shailendra Singh"). Plain 'Shailendra' in prose would still
-    # match 'colleagues' — but 'Shailendra' isn't in the colleagues regex.
-    # The exemption here is conceptual; no pattern actually needs it today.
     return False
 
 
@@ -133,7 +129,6 @@ def main() -> int:
         for name, rx in PATTERNS:
             print(f"{name}: {rx.pattern}")
         print(f"placeholders (allowed): {sorted(PLACEHOLDER_IDS)}")
-        print(f"author carve-out: {AUTHOR_NAME_LITERAL!r}")
         return 0
 
     root = Path(args.root).resolve()
