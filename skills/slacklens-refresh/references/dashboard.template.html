@@ -104,6 +104,12 @@ body {
 }
 * { box-sizing: border-box; }
 
+/* Make [hidden] actually hide elements whose class rules set an explicit
+   display (.sl-panel uses flex, .sl-vip uses inline-block, etc. — without
+   this, hidden gets overridden by class specificity and the element stays
+   visible). This is the canonical fix for the "panel won't close" footgun. */
+[hidden] { display: none !important; }
+
 .sl-flow {
   margin-top: 20px;
 }
@@ -170,13 +176,18 @@ body {
 .sl-item {
   position: relative;
   display: grid;
-  grid-template-columns: 2px 1fr;
+  /* minmax(0, 1fr) lets the body column shrink below its content width;
+     otherwise long messages blow out the row and ignore text-overflow. */
+  grid-template-columns: 2px minmax(0, 1fr);
   gap: 10px;
   padding: var(--item-py) 6px var(--item-py) 0;
   border-bottom: 1px solid var(--border-faint);
   cursor: pointer;
   border-radius: 4px;
 }
+.sl-item-body { min-width: 0; }
+.sl-item-head { min-width: 0; gap: 8px; }
+.sl-item-from { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sl-item:last-child { border-bottom: 0; }
 .sl-item:hover { background: var(--surface-2); }
 .sl-item[data-active="1"] .sl-item-bar { box-shadow: 0 0 0 3px rgba(182, 69, 53, 0.18); }
@@ -1352,8 +1363,12 @@ function currentSystemTheme() {
 function applyTheme(t) {
   if (!THEME_CYCLE.includes(t)) t = 'auto';
   const effective = (t === 'auto') ? currentSystemTheme() : t;
-  if (effective === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-  else                       document.documentElement.removeAttribute('data-theme');
+  // For 'auto', let the prefers-color-scheme media query drive colors by
+  // leaving data-theme unset. For 'light' or 'dark', set data-theme
+  // explicitly so the media query's :not([data-theme]) branch doesn't
+  // override the user's explicit choice.
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+  else              document.documentElement.setAttribute('data-theme', t);
   const btn = document.getElementById('themeToggle');
   if (btn) {
     btn.textContent = (effective === 'dark') ? '☼' : '☾';
