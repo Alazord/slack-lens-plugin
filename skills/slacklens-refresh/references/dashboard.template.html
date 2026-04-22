@@ -722,8 +722,32 @@ function overrideFor(key) {
 }
 
 // ---------- Loading ----------
+function clearBanner() {
+  const b = document.getElementById('banner');
+  if (!b) return;
+  b.hidden = true;
+  b.removeAttribute('data-severity');
+  b.textContent = '';
+}
+function showBanner(severity, text) {
+  const b = document.getElementById('banner');
+  if (!b) return;
+  b.hidden = false;
+  b.dataset.severity = severity;
+  b.textContent = text;
+}
+function checkSchemaBanner() {
+  if (!raw || !raw.search_results) return;
+  const sr = raw.search_results;
+  const hasOldKeys = ('dms_received' in sr) || ('outgoing_dms' in sr);
+  const hasNewKeys = ('mentions' in sr) && ('dms' in sr) && ('channels' in sr);
+  if (hasOldKeys && !hasNewKeys) {
+    showBanner('warn', 'Your cache predates v0.2.0 — run "refresh slacklens" to rebuild.');
+  }
+}
+
 async function loadCache() {
-  setNotice('', null);
+  clearBanner();
   // 1) Try a live fetch (works when served over http://)
   const url = './slack-triage-cache.json?t=' + Date.now();
   try {
@@ -731,21 +755,26 @@ async function loadCache() {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     raw = await r.json();
     normalize();
+    checkSchemaBanner();
     render();
-    setNotice('Loaded fresh cache from disk at ' + new Date().toLocaleTimeString() + '.', 'info');
-    setTimeout(() => setNotice('', null), 3500);
     return;
   } catch (e) {
     // 2) Fall back to the cache embedded at file generation time.
     if (window.__SLACK_CACHE__) {
       raw = window.__SLACK_CACHE__;
       normalize();
+      checkSchemaBanner();
       render();
-      // embedded cache — no banner
+      // Only show the fetch-failed banner if the user explicitly reloaded and we expected a live fetch.
+      // Under file:// the fallback is the normal path, so suppress by default.
+      if (url.startsWith('http')) {
+        showBanner('warn', 'Showing embedded cache — live refresh failed (' + e.message + ').');
+      }
       return;
     }
-    setNotice('No cache data available (' + e.message + ').', 'err');
-    document.getElementById('freshness').innerHTML = 'No cache loaded.';
+    showBanner('warn', 'No cache data available (' + e.message + ').');
+    const f = document.getElementById('freshness');
+    if (f) f.textContent = 'No cache loaded.';
   }
 }
 
@@ -970,9 +999,49 @@ function render() {
   const shown = applyFilter(items);
   const channels = partitionByChannel(shown);
 
+  // Three empty-state paths
+  if (!raw || (!raw.search_results && !raw.threads)) {
+    empty.hidden = false;
+    empty.innerHTML =
+      '<h4>No cache loaded yet</h4>' +
+      '<p>Run a refresh to populate the dashboard.</p>' +
+      '<button id="emptyReload" type="button">Reload</button>';
+    const btn = document.getElementById('emptyReload');
+    if (btn) btn.onclick = () => loadCache();
+    return;
+  }
+
+  const activelyFiltered =
+    filter.scope !== 'all' ||
+    (Array.isArray(filter.status) && filter.status.length > 0) ||
+    (filter.query || '').trim() !== '';
+
+  if (channels.length === 0 && activelyFiltered) {
+    empty.hidden = false;
+    empty.innerHTML =
+      '<h4>Nothing matches</h4>' +
+      '<p>Your filter did not match any threads.</p>' +
+      '<button id="emptyClear" type="button">Clear filter</button>';
+    const clear = document.getElementById('emptyClear');
+    if (clear) clear.onclick = () => {
+      filter.scope = 'all';
+      filter.status = [];
+      filter.query = '';
+      const si = document.getElementById('searchInput');
+      if (si) si.value = '';
+      document.querySelectorAll('#categoryPills .sl-pill').forEach(b =>
+        b.classList.toggle('active', b.dataset.scope === 'all'));
+      document.querySelectorAll('#statusPills .sl-pill').forEach(b => b.classList.remove('active'));
+      render();
+    };
+    return;
+  }
+
   if (channels.length === 0) {
     empty.hidden = false;
-    empty.innerHTML = '<h4>Nothing in the last 48 hours</h4><p>Catch your breath.</p>';
+    empty.innerHTML =
+      '<h4>Nothing in the last 48 hours</h4>' +
+      '<p>Catch your breath.</p>';
     return;
   }
   empty.hidden = true;
@@ -1164,11 +1233,29 @@ function bootFilters() {
   const reload = document.getElementById('reloadBtn');
   if (reload) reload.addEventListener('click', () => loadCache());
 }
-function updateFreshness() {              // Task 12 completes
+const STALE_CACHE_HOURS = 12;
+
+function updateFreshness() {
   const f = document.getElementById('freshness');
-  if (!f || !raw) return;
-  const n = items.length;
-  f.textContent = `${n} · ${raw.refreshed_at || 'unknown'}`;
+  if (!f) return;
+  const total = items.length;
+  if (!raw || !raw.refreshed_at) {
+    f.textContent = `${total} · no data`;
+    f.removeAttribute('data-stale');
+    return;
+  }
+  const t = Date.parse(raw.refreshed_at);
+  const ageHours = (Date.now() - t) / 3600000;
+  f.textContent = `${total} · ${humanAge(ageHours)}`;
+  f.title = raw.refreshed_at;
+  f.dataset.stale = (ageHours > STALE_CACHE_HOURS) ? '1' : '0';
+}
+
+function humanAge(h) {
+  if (h < 0.05) return 'just now';
+  if (h < 1)    return `${Math.round(h * 60)}m ago`;
+  if (h < 24)   return `${Math.round(h)}h ago`;
+  return `${Math.round(h / 24)}d ago`;
 }
 
 function effectiveItem(it) {
