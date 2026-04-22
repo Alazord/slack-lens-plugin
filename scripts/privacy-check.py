@@ -13,6 +13,17 @@ Carve-outs:
   - Four documented placeholder user IDs are allowed:
       U01EXAMPLE99, U02EXAMPLE11, U01ALICE000, U01BOB00000.
 
+Known limits (document-not-fix):
+  - Scans the working tree only. Leaks committed then later removed are
+    still present in git history; this script will not see them. Run
+    `git log -p -- <path> | grep <pattern>` separately before tagging
+    a public release.
+  - The colleague-name regex is literal ASCII. Names with diacritics
+    (e.g. "Anmól", "José") pass through unflagged. Add explicit entries
+    to the COLLEAGUE_NAMES list if they become relevant.
+  - The .git directory is intentionally excluded (history is separate
+    surface — see first bullet).
+
 Usage:
   python3 scripts/privacy-check.py                    # scan current dir
   python3 scripts/privacy-check.py --root path/to/x   # scan elsewhere

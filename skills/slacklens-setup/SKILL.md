@@ -7,15 +7,16 @@ You are running the one-time setup for SlackLens for this user.
 
 ## Step 0 — Verify Slack MCP is connected and has the tools we need
 
-SlackLens uses four read-only Slack MCP tools. Probe each once to make
-sure the connector is live AND modern enough. Run these four calls,
-ignoring their actual return values — we only care whether each one
-*exists*:
+SlackLens uses four read-only Slack MCP tools, but we only probe three
+of them here — the fourth (`slack_read_thread`) gets exercised during
+Step 6's first refresh, and probing it up front with an invalid thread
+id counts against the same per-workspace rate limit that Step 6 relies
+on. Run these three calls, ignoring their actual return values — we
+only care whether each one *exists*:
 
 1. `slack_search_users` with query `"a"`, limit 1.
 2. `slack_read_user_profile` with no arguments.
 3. `slack_search_public_and_private` with query `"a"`, limit 1.
-4. `slack_read_thread` with a clearly-invalid `channel_id: "C0"` and `thread_ts: "0"` — the tool may return an error about the bad arguments, which is fine; that still proves the tool is wired up. A "tool not found" or "MCP not connected" error is NOT fine.
 
 For each call, if it fails with "MCP not connected", "tool not found",
 "unknown tool", or any auth error, STOP and tell the user:
@@ -186,14 +187,30 @@ user_id   = os.environ["USER_ID"]
 user_name = os.environ["USER_NAME"]
 vip_ids   = [p["id"]   for p in priority]
 vip_names = [p["name"] for p in priority]
-html = re.sub(r"const ME_ID\s*=\s*'[^']*'",
-              lambda _m: "const ME_ID = "   + json.dumps(user_id),   html)
-html = re.sub(r"const ME_NAME\s*=\s*'[^']*'",
-              lambda _m: "const ME_NAME = " + json.dumps(user_name), html)
-html = re.sub(r"const VIP_IDS\s*=\s*\[[^\]]*\]",
-              lambda _m: "const VIP_IDS = "   + json.dumps(vip_ids),   html)
-html = re.sub(r"const VIP_NAMES\s*=\s*\[[^\]]*\]",
-              lambda _m: "const VIP_NAMES = " + json.dumps(vip_names), html)
+
+# Substitute + verify each marker actually matched. A one-character
+# template change (e.g. switching the placeholder quote style) would
+# otherwise make re.sub silently no-op and ship a dashboard with empty
+# identity constants — the UI would render but VIP/me detection would
+# be broken with no obvious symptom.
+def sub_checked(pattern, replacement, text, label):
+    new_text, count = re.subn(pattern, replacement, text, count=1)
+    if count == 0:
+        raise SystemExit(
+            "ERROR: identity substitution failed for " + label + ". "
+            "The dashboard template probably changed its placeholder "
+            "shape — update this skill's regex."
+        )
+    return new_text
+
+html = sub_checked(r"const ME_ID\s*=\s*'[^']*'",
+                   lambda _m: "const ME_ID = "   + json.dumps(user_id),   html, "ME_ID")
+html = sub_checked(r"const ME_NAME\s*=\s*'[^']*'",
+                   lambda _m: "const ME_NAME = " + json.dumps(user_name), html, "ME_NAME")
+html = sub_checked(r"const VIP_IDS\s*=\s*\[[^\]]*\]",
+                   lambda _m: "const VIP_IDS = "   + json.dumps(vip_ids),   html, "VIP_IDS")
+html = sub_checked(r"const VIP_NAMES\s*=\s*\[[^\]]*\]",
+                   lambda _m: "const VIP_NAMES = " + json.dumps(vip_names), html, "VIP_NAMES")
 with open(dst, "w", encoding="utf-8") as f:
     f.write(html)
 

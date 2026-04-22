@@ -169,13 +169,13 @@ if len(threads) > 50:
     data["threads"] = threads
     print("NOTE: capped threads at 50")
 
-data["refreshed_at"] = datetime.now().isoformat()
+# RFC 3339 timestamp with local offset (`astimezone()`) — the dashboard's
+# Date.parse treats naive ISO strings as UTC on some browsers, which yields
+# wrong freshness labels for non-UTC users.
+data["refreshed_at"] = datetime.now().astimezone().isoformat()
 
-# 1. Write cache.json
-with open(os.path.join(home, "cache.json"), "w", encoding="utf-8") as f:
-    json.dump(data, f, ensure_ascii=False, indent=2)
-
-# 2. Re-inject the cache blob into dashboard.html
+# Re-inject the cache blob into dashboard.html BEFORE writing cache.json,
+# so a regex/parse failure doesn't leave the two files out of sync.
 dash_path = os.path.join(home, "dashboard.html")
 with open(dash_path, "r", encoding="utf-8") as f:
     html = f.read()
@@ -185,22 +185,47 @@ new_json = json.dumps(data, ensure_ascii=False,
                       separators=(",", ":")).replace("</", "<\\/")
 new_assignment = "window.__SLACK_CACHE__ = " + new_json + ";"
 
-# Use a lambda replacement — passing new_assignment directly as a string
-# makes re.sub reinterpret escape sequences like '\n' in the JSON payload
-# as actual newlines, which corrupts the blob and breaks JS parsing.
+# The regex is anchored on the sentinel comment `// __SLACK_CACHE_END__`
+# rather than the blob's own `};`, so a user message containing the literal
+# substring `};` cannot terminate the non-greedy match early. The template
+# intentionally places that sentinel right after the assignment.
+#
+# Lambda replacement avoids re.sub reinterpreting escape sequences like '\n'
+# in the JSON payload as actual newlines.
+SENTINEL = "// __SLACK_CACHE_END__"
 updated = re.sub(
-    r"window\.__SLACK_CACHE__\s*=\s*\{.*?\};",
-    lambda _m: new_assignment,
+    r"window\.__SLACK_CACHE__\s*=\s*\{.*?\};(\s*\n\s*)" + re.escape(SENTINEL),
+    lambda _m: new_assignment + _m.group(1) + SENTINEL,
     html,
     count=1,
     flags=re.DOTALL,
 )
 
 if updated == html:
-    raise SystemExit("ERROR: dashboard cache marker not found in dashboard.html")
+    raise SystemExit("ERROR: dashboard cache marker or sentinel not found "
+                     "in dashboard.html — re-run 'set up slack lens' to "
+                     "refresh the template.")
 
+# Sanity: the new blob must round-trip through json.loads, else we'd ship a
+# broken dashboard. (Belt-and-braces: json.dumps produced it, so this should
+# always pass — but the check is cheap and catches any future regex edits
+# that accidentally swallow a trailing character.)
+m = re.search(r"window\.__SLACK_CACHE__\s*=\s*(\{.*?\});(\s*\n\s*)" + re.escape(SENTINEL),
+              updated, flags=re.DOTALL)
+if not m:
+    raise SystemExit("ERROR: post-inject readback failed to find the blob")
+try:
+    json.loads(m.group(1))
+except Exception as e:
+    raise SystemExit("ERROR: injected blob is not valid JSON: " + str(e))
+
+# Now atomic-ish: write both files. Dashboard first so a mid-write crash
+# leaves the old cache.json visible (consistent-ish) rather than a fresh
+# cache.json with a stale dashboard.
 with open(dash_path, "w", encoding="utf-8") as f:
     f.write(updated)
+with open(os.path.join(home, "cache.json"), "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
 
 m = sum(len(q.get("results", [])) for q in sr["mentions"])
 d = sum(len(q.get("results", [])) for q in sr["dms"])
