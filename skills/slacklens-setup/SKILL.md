@@ -265,7 +265,7 @@ If they answer **yes** (or "sure", "ok", "please do"):
    - `taskId`: `slacklens-refresh`
    - `description`: `Refresh the SlackLens dashboard cache every 8 hours.`
    - `cronExpression`: `0 */8 * * *`   (every 8h on the hour, local time)
-   - `prompt`: `Run the slacklens-refresh skill from the slacklens plugin to refresh the SlackLens dashboard cache.`
+   - `prompt`: `Run the slacklens-refresh skill from the slacklens plugin and force a full 48h refresh (set $SLACKLENS_FORCE_FULL=1 before invoking) so any edits or deletions in the last 8 hours are picked up and the cache stays drift-free.`
 
    If this errors with "already exists" (e.g. delete tool was absent),
    catch it and continue.

@@ -1,46 +1,113 @@
 ---
 name: slacklens-refresh
-description: Refreshes the SlackLens dashboard with the latest mentions, DMs, and active threads from Slack. Use when the user says "refresh slacklens", "refresh slack lens", "reload slacklens", "update my slack triage", or when triggered automatically by the scheduled task.
+description: Refreshes the SlackLens dashboard with the latest mentions, DMs, and active threads from Slack. Picks DELTA mode automatically when the cache is fresh (under 48h old) to fetch only what is new since the last refresh — cheap enough to run every few minutes without hitting Slack rate limits. Falls back to a FULL 48-hour fetch when the cache is stale or missing. Use when the user says "refresh slacklens", "refresh slack lens", "reload slacklens", "update my slack triage", or the scheduled task fires. Use FULL mode (set $SLACKLENS_FORCE_FULL=1 before running) when the user says "force full refresh slacklens", "deep refresh slacklens", or the cache seems drifted.
 ---
 
 You are refreshing SlackLens for the connected Slack user.
 
-The dashboard reads a cache JSON in a **very specific shape**. Producing the
-wrong shape silently empties the dashboard. Follow the schema in Step 1
-**exactly** — keys, nesting, and per-result fields.
+The dashboard reads a cache JSON in a **very specific shape**. Producing
+the wrong shape silently empties the dashboard. Follow the schema in
+Step 1 **exactly** — keys, nesting, and per-result fields.
 
-## Step 0 — Load config
+## Overview — two modes
+
+This skill picks one of two fetch modes each run:
+
+- **FULL**: query the last 48 hours from scratch, ignore existing
+  cache. Used when there is no cache yet, when the cache is >48h old,
+  or when the user asks for a "force full / deep refresh". Safe
+  baseline — expensive but always correct.
+- **DELTA**: query only from `cache.refreshed_at` up to now, merge
+  new results into the existing cache, purge items older than 48h.
+  Used when the cache is fresh. Cheap — roughly one fifth the Slack
+  API load of FULL for a 30-minute-old cache.
+
+Mode is chosen in Step 0. The rest of the skill reads the chosen mode
+from an env var and branches accordingly.
+
+## Step 0 — Load config and decide mode
 
 ```bash
 python3 - <<'PY'
 import json, os
+from datetime import datetime, timezone, timedelta
+
 home = os.path.expanduser("~/.slacklens")
 cfg_path = os.path.join(home, "config.json")
 if not os.path.exists(cfg_path):
     raise SystemExit("ERROR: ~/.slacklens/config.json not found. "
                      "Run 'set up slack lens' first.")
 cfg = json.load(open(cfg_path))
+
+mode = "FULL"
+since_epoch = 0.0   # float unix seconds; everything strictly before is dropped
+after_date  = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d")
+
+force_full = bool(os.environ.get("SLACKLENS_FORCE_FULL"))
+
+cache_path = os.path.join(home, "cache.json")
+if os.path.isfile(cache_path) and not force_full:
+    try:
+        old = json.load(open(cache_path, encoding="utf-8"))
+        raw_ts = old.get("refreshed_at") or ""
+        ts = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+        now = datetime.now(ts.tzinfo or timezone.utc)
+        hrs = (now - ts).total_seconds() / 3600
+        if hrs < 48:
+            mode        = "DELTA"
+            since_epoch = ts.timestamp()
+            after_date  = ts.strftime("%Y-%m-%d")
+    except Exception:
+        # Any parse issue → fall back to FULL. Never crash here.
+        mode = "FULL"
+
 print("USER_ID=" + cfg["user"]["slack_id"])
 print("USER_NAME=" + cfg["user"]["name"])
+print("MODE=" + mode)
+print("AFTER=" + after_date)
+print("SINCE_EPOCH=" + repr(since_epoch))   # float, keep full precision
+if force_full and os.path.isfile(cache_path):
+    print("NOTE: $SLACKLENS_FORCE_FULL set — forcing FULL mode")
 PY
 ```
 
-Use the `USER_ID` and `USER_NAME` values for the next steps.
+Read `MODE`, `AFTER`, `SINCE_EPOCH`, `USER_ID`, `USER_NAME` from the
+output. Use them for Step 1.
 
-## Step 1 — Fetch Slack data (last 48 hours)
+If the user invoked this skill with "force full refresh", "deep
+refresh", or similar wording, set the env var **before** the block
+above runs: `SLACKLENS_FORCE_FULL=1`.
 
-Compute `AFTER` as YYYY-MM-DD for two days ago. Then run **three** Slack
-searches via `slack_search_public_and_private`:
+## Step 1 — Fetch Slack data
+
+Run **three** Slack searches via `slack_search_public_and_private`:
 
 | Bucket     | Query                                                                            | What it captures |
 |------------|----------------------------------------------------------------------------------|------------------|
-| `mentions` | `to:<@USER_ID> after:AFTER`                                                      | Messages addressed directly to the user (DMs received + @-mentions in DMs) |
-| `dms`      | `from:<@USER_ID> after:AFTER channel_types:im,mpim`                              | The user's outgoing DMs (so the dashboard can see what they last said) |
-| `channels` | `<@USER_ID> after:AFTER channel_types:public_channel,private_channel`            | @-mentions of the user in public/private channels |
+| `mentions` | `to:<@USER_ID> after:AFTER`                                                      | Messages addressed directly to the user |
+| `dms`      | `from:<@USER_ID> after:AFTER channel_types:im,mpim`                              | The user's outgoing DMs |
+| `channels` | `<@USER_ID> after:AFTER channel_types:public_channel,private_channel`            | @-mentions in channels |
 
-For every distinct `(channel_id, thread_ts)` pair across all three bucket
-results, call `slack_read_thread` to fetch the full thread. **Cap thread
-fetches at 50 in code** (Step 2 enforces this defensively).
+### Mode-specific post-processing
+
+- **FULL mode**: keep every result the search returned.
+- **DELTA mode**: Slack's `after:` is date-granular, so the three
+  searches will return everything from the start of `AFTER`'s date,
+  not just since `SINCE_EPOCH`. Drop any result whose
+  `float(message_ts) < SINCE_EPOCH`. This is a client-side filter —
+  each result object carries `message_ts` as a string already.
+
+### Threads
+
+For every distinct `(channel_id, thread_ts)` pair across all three
+(filtered) buckets, call `slack_read_thread` to fetch the full thread.
+**Cap thread fetches at 50** in code (Step 2 enforces this defensively).
+
+In DELTA mode this still re-fetches the full thread (not just new
+replies) because:
+- Slack's thread API is cheap relative to search.
+- It's the simplest correct way to pick up edits and deletions inside
+  an otherwise-cached thread.
 
 ### Required cache shape (the dashboard reads this exactly)
 
@@ -64,35 +131,8 @@ fetches at 50 in code** (Step 2 enforces this defensively).
         ]
       }
     ],
-    "dms": [
-      {
-        "query":   "from:<@U01EXAMPLE99> after:2026-04-19 channel_types:im,mpim",
-        "note":    "User's outgoing DM messages from last 48h",
-        "results": [
-          {
-            "channel_id": "C01EXAMPLE00",
-            "from_user":  "Jane Doe (U01EXAMPLE99)",
-            "message_ts": "1776757683.434379",
-            "time":       "2026-04-21 13:18:03 IST",
-            "text":       "Yep, taking a look now."
-          }
-        ]
-      }
-    ],
-    "channels": [
-      {
-        "query":   "<@U01EXAMPLE99> after:2026-04-19 channel_types:public_channel,private_channel",
-        "results": [
-          {
-            "channel_id":   "C02EXAMPLE11",
-            "channel_name": "#project-example",
-            "from_user":    "Bob Example (U01BOB00000)",
-            "message_ts":   "1776755048.906429",
-            "text":         "add Jane Doe (to huddle)"
-          }
-        ]
-      }
-    ]
+    "dms":      [ { "query": "...", "results": [ ... ] } ],
+    "channels": [ { "query": "...", "results": [ ... ] } ]
   },
   "threads": {
     "<channel_id>:<thread_ts>": {
@@ -100,13 +140,11 @@ fetches at 50 in code** (Step 2 enforces this defensively).
       "channel_name": "Group DM (...)",
       "thread_ts":    "1776757696.480349",
       "messages": [
-        {
-          "from":      "Alice Example (U01ALICE000)",
-          "ts":        "1776757696.480349",
-          "time":      "2026-04-21 13:18:16 IST",
-          "text":      "Hey, can you review this?",
-          "permalink": "https://example.slack.com/archives/C.../p..."
-        }
+        { "from": "Alice Example (U01ALICE000)",
+          "ts":   "1776757696.480349",
+          "time": "2026-04-21 13:18:16 IST",
+          "text": "Hey, can you review this?",
+          "permalink": "https://..." }
       ]
     }
   }
@@ -115,72 +153,161 @@ fetches at 50 in code** (Step 2 enforces this defensively).
 
 **Hard rules:**
 
-- The three bucket keys are **`mentions`, `dms`, `channels`**. Not `dms_received`,
-  not `outgoing_dms`. Wrong keys = empty dashboard.
-- Each bucket value is an **array** of `{query, results, [note]}` objects, even
-  if you only ran one query. The dashboard sums `results.length` across the array.
+- The three bucket keys are **`mentions`, `dms`, `channels`**. Not
+  `dms_received`, not `outgoing_dms`. Wrong keys = empty dashboard.
+- Each bucket value is an **array** of `{query, results, [note]}`
+  objects. The dashboard sums `results.length` across the array.
 - Per-result field names are **lowercase snake_case** as shown.
 - Top-level keys are exactly `refreshed_at`, `search_results`, `threads`.
 
-## Step 2 — Write the cache and rebuild the dashboard
+## Step 2 — Build the final cache (merge if DELTA, replace if FULL)
 
-Write the in-memory dict to `/tmp/slacklens-refresh.json` using the
-**Write tool** (not a bash heredoc — heredocs corrupt backslashes and can
-hit `ARG_MAX` on busy workspaces). Then run the Python block below to
-validate the shape, write `~/.slacklens/cache.json`, and re-inject the
-cache into `~/.slacklens/dashboard.html`.
+Write the in-memory dict you just built (the Step-1 payload — three
+buckets + threads) to `/tmp/slacklens-refresh.json` using the **Write
+tool** (not a bash heredoc — heredocs corrupt backslashes and can hit
+`ARG_MAX` on busy workspaces).
+
+Include the chosen MODE in the dict's top-level metadata so the Step-2
+Python block knows which branch to take. Shape:
+
+```json
+{
+  "_mode": "DELTA",
+  "search_results": { "mentions": [...], "dms": [...], "channels": [...] },
+  "threads": { ... }
+}
+```
+
+Then run:
 
 ```bash
 python3 - <<'PY'
 import json, os, re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 home = os.path.expanduser("~/.slacklens")
 tmp  = "/tmp/slacklens-refresh.json"
 
 with open(tmp, "r", encoding="utf-8") as f:
-    data = json.load(f)
+    delta = json.load(f)
 
-# --- Validation: bail loudly if shape is wrong ---
-if not isinstance(data, dict):
+mode = delta.pop("_mode", "FULL")
+
+# --- Validation on what we just fetched ---
+if not isinstance(delta, dict):
     raise SystemExit("ERROR: data is not a dict")
-sr = data.get("search_results")
+sr = delta.get("search_results")
 if not isinstance(sr, dict):
     raise SystemExit("ERROR: data['search_results'] missing or not a dict")
 for key in ("mentions", "dms", "channels"):
     if key not in sr:
-        raise SystemExit("ERROR: search_results['" + key + "'] missing — "
-                         "dashboard will render empty for this bucket")
+        raise SystemExit("ERROR: search_results['" + key + "'] missing")
     if not isinstance(sr[key], list):
         raise SystemExit("ERROR: search_results['" + key + "'] must be an "
                          "array of {query, results} objects")
-threads = data.get("threads", {})
-if not isinstance(threads, dict):
-    raise SystemExit("ERROR: data['threads'] must be an object keyed by "
-                     "'<channel_id>:<thread_ts>'")
+threads_new = delta.get("threads", {})
+if not isinstance(threads_new, dict):
+    raise SystemExit("ERROR: data['threads'] must be an object")
 
-# --- Hard cap on threads: defensive, not just prose ---
-if len(threads) > 50:
-    keys_sorted = sorted(threads, key=lambda k: max(
-        (m.get("ts", "0") for m in threads[k].get("messages", [])),
-        default="0"
-    ), reverse=True)
-    threads = {k: threads[k] for k in keys_sorted[:50]}
-    data["threads"] = threads
+# --- Decide final shape: merge-with-old (DELTA) or use-as-is (FULL) ---
+cache_path = os.path.join(home, "cache.json")
+if mode == "DELTA" and os.path.isfile(cache_path):
+    try:
+        old = json.load(open(cache_path, encoding="utf-8"))
+    except Exception:
+        old = None
+    if not isinstance(old, dict):
+        old = None
+else:
+    old = None
+
+def merge_bucket(old_bucket, new_bucket):
+    """Return a single-entry array whose results are dedup(old ∪ new) by permalink,
+    preserving newest-first order."""
+    seen = set()
+    merged = []
+    # Start with new results (they're freshest), then fill in old
+    new_results = []
+    for q in (new_bucket or []):
+        for r in (q.get("results") or []):
+            new_results.append(r)
+    old_results = []
+    for q in (old_bucket or []):
+        for r in (q.get("results") or []):
+            old_results.append(r)
+    for r in new_results + old_results:
+        key = r.get("permalink") or (r.get("channel_id", "") + ":" + r.get("message_ts", ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(r)
+    # sort newest-first
+    merged.sort(key=lambda r: float(r.get("message_ts") or 0), reverse=True)
+    # Keep the query string from the new fetch if present
+    query = ""
+    if new_bucket and len(new_bucket) > 0:
+        query = (new_bucket[0] or {}).get("query") or ""
+    return [{"query": query, "results": merged}]
+
+if old is not None:
+    old_sr = old.get("search_results") or {}
+    for key in ("mentions", "dms", "channels"):
+        sr[key] = merge_bucket(old_sr.get(key), sr.get(key))
+    # Threads: old ∪ new. Touched threads in `threads_new` replace
+    # old entries wholesale (we just re-fetched them).
+    merged_threads = {}
+    for k, v in (old.get("threads") or {}).items():
+        merged_threads[k] = v
+    for k, v in threads_new.items():
+        merged_threads[k] = v
+    threads_new = merged_threads
+    print("merged with old cache (DELTA mode)")
+
+# --- Purge items older than 48h (sliding window) ---
+now = datetime.now(timezone.utc)
+cutoff = (now - timedelta(hours=48)).timestamp()
+
+def within_window(r):
+    try:
+        return float(r.get("message_ts") or 0) >= cutoff
+    except Exception:
+        return False
+
+before = sum(len(q.get("results", [])) for key in ("mentions", "dms", "channels") for q in sr[key])
+for key in ("mentions", "dms", "channels"):
+    for q in sr[key]:
+        q["results"] = [r for r in (q.get("results") or []) if within_window(r)]
+after_count = sum(len(q.get("results", [])) for key in ("mentions", "dms", "channels") for q in sr[key])
+if before != after_count:
+    print("purged " + str(before - after_count) + " search results older than 48h")
+
+# Threads: keep only those whose newest message is within window.
+def thread_newest_ts(t):
+    try:
+        msgs = t.get("messages") or []
+        return max((float(m.get("ts") or 0) for m in msgs), default=0.0)
+    except Exception:
+        return 0.0
+
+keep_threads = {k: v for k, v in threads_new.items() if thread_newest_ts(v) >= cutoff}
+if len(keep_threads) != len(threads_new):
+    print("purged " + str(len(threads_new) - len(keep_threads)) + " threads older than 48h")
+threads_new = keep_threads
+
+# --- Hard cap on threads: defensive ---
+if len(threads_new) > 50:
+    keys_sorted = sorted(threads_new, key=thread_newest_ts, reverse=True)
+    threads_new = {k: threads_new[k] for k in keys_sorted[:50]}
     print("NOTE: capped threads at 50")
 
-# RFC 3339 timestamp with local offset (`astimezone()`) — the dashboard's
-# Date.parse treats naive ISO strings as UTC on some browsers, which yields
-# wrong freshness labels for non-UTC users.
-data["refreshed_at"] = datetime.now().astimezone().isoformat()
+# --- Assemble final data dict ---
+data = {
+    "refreshed_at": datetime.now().astimezone().isoformat(),
+    "search_results": sr,
+    "threads": threads_new,
+}
 
-# Before re-injecting the cache, refresh the dashboard HTML from the
-# plugin's bundled template. This means template / CSS / JS updates shipped
-# in later plugin versions propagate on the user's very next refresh —
-# they don't have to re-run `set up slacklens` just to pick up UI changes.
-# If $CLAUDE_PLUGIN_ROOT isn't set (e.g. running this skill by hand, not
-# via a plugin install), skip the re-copy and use the existing dashboard
-# as-is; the cache re-inject below still runs.
+# --- Dashboard template re-copy from plugin root (picks up UI updates) ---
 dash_path = os.path.join(home, "dashboard.html")
 plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT", "").strip()
 if plugin_root:
@@ -189,8 +316,6 @@ if plugin_root:
                         "references", "dashboard.template.html")
     if os.path.isfile(tmpl):
         shutil.copy(tmpl, dash_path)
-        # Also re-inject the user's identity + VIPs from config.json,
-        # since the fresh template has empty-string placeholders.
         cfg = json.load(open(os.path.join(home, "config.json")))
         user = cfg["user"]
         priority = cfg.get("priority_people", [])
@@ -199,84 +324,61 @@ if plugin_root:
         def _sub_checked(pattern, repl, text, label):
             new_text, count = re.subn(pattern, repl, text, count=1)
             if count == 0:
-                raise SystemExit("ERROR: identity substitution failed for "
-                                 + label + " — template placeholder shape "
-                                 "may have changed.")
+                raise SystemExit("ERROR: identity substitution failed for " + label)
             return new_text
-        html_id = open(dash_path, "r", encoding="utf-8").read()
-        html_id = _sub_checked(r"const ME_ID\s*=\s*'[^']*'",
-                               lambda _m: "const ME_ID = "   + json.dumps(user["slack_id"]), html_id, "ME_ID")
-        html_id = _sub_checked(r"const ME_NAME\s*=\s*'[^']*'",
-                               lambda _m: "const ME_NAME = " + json.dumps(user["name"]),     html_id, "ME_NAME")
-        html_id = _sub_checked(r"const VIP_IDS\s*=\s*\[[^\]]*\]",
-                               lambda _m: "const VIP_IDS = "   + json.dumps(vip_ids),   html_id, "VIP_IDS")
-        html_id = _sub_checked(r"const VIP_NAMES\s*=\s*\[[^\]]*\]",
-                               lambda _m: "const VIP_NAMES = " + json.dumps(vip_names), html_id, "VIP_NAMES")
-        open(dash_path, "w", encoding="utf-8").write(html_id)
+        h = open(dash_path, "r", encoding="utf-8").read()
+        h = _sub_checked(r"const ME_ID\s*=\s*'[^']*'",
+                         lambda _m: "const ME_ID = "   + json.dumps(user["slack_id"]), h, "ME_ID")
+        h = _sub_checked(r"const ME_NAME\s*=\s*'[^']*'",
+                         lambda _m: "const ME_NAME = " + json.dumps(user["name"]),     h, "ME_NAME")
+        h = _sub_checked(r"const VIP_IDS\s*=\s*\[[^\]]*\]",
+                         lambda _m: "const VIP_IDS = "   + json.dumps(vip_ids),   h, "VIP_IDS")
+        h = _sub_checked(r"const VIP_NAMES\s*=\s*\[[^\]]*\]",
+                         lambda _m: "const VIP_NAMES = " + json.dumps(vip_names), h, "VIP_NAMES")
+        open(dash_path, "w", encoding="utf-8").write(h)
 
+# --- Cache-blob injection ---
 with open(dash_path, "r", encoding="utf-8") as f:
     html = f.read()
 
-# Escape '</' so closing tags inside the JSON don't terminate the script tag
 new_json = json.dumps(data, ensure_ascii=False,
                       separators=(",", ":")).replace("</", "<\\/")
 new_assignment = "window.__SLACK_CACHE__ = " + new_json + ";"
 
-# The regex is anchored two ways:
-#  1. `^` at line start (MULTILINE flag) — so a comment mentioning the
-#     identifier doesn't accidentally match first; only a real top-level
-#     assignment at column 0 qualifies.
-#  2. The sentinel comment on the following line as the terminator — so
-#     a user message containing the JS closing-brace pair cannot end the
-#     non-greedy match early.
-# Lambda replacement avoids re.sub reinterpreting escape sequences like
-# '\n' in the JSON payload as actual newlines.
 SENTINEL = "// __SLACK_CACHE_END__"
 PATTERN = r"^window\.__SLACK_CACHE__\s*=\s*\{.*?\};(\s*\n\s*)" + re.escape(SENTINEL)
-updated = re.sub(
-    PATTERN,
+updated = re.sub(PATTERN,
     lambda _m: new_assignment + _m.group(1) + SENTINEL,
-    html,
-    count=1,
-    flags=re.DOTALL | re.MULTILINE,
+    html, count=1, flags=re.DOTALL | re.MULTILINE,
 )
-
 if updated == html:
-    raise SystemExit("ERROR: dashboard cache marker or sentinel not found "
-                     "in dashboard.html — re-run 'set up slack lens' to "
-                     "refresh the template.")
+    raise SystemExit("ERROR: cache marker + sentinel not found in dashboard.html")
 
-# Sanity: the new blob must round-trip through json.loads, else we'd ship a
-# broken dashboard. (Belt-and-braces: json.dumps produced it, so this should
-# always pass — but the check is cheap and catches any future regex edits
-# that accidentally swallow a trailing character.)
 m = re.search(r"^window\.__SLACK_CACHE__\s*=\s*(\{.*?\});(\s*\n\s*)" + re.escape(SENTINEL),
               updated, flags=re.DOTALL | re.MULTILINE)
 if not m:
-    raise SystemExit("ERROR: post-inject readback failed to find the blob")
+    raise SystemExit("ERROR: post-inject readback failed")
 try:
     json.loads(m.group(1))
 except Exception as e:
     raise SystemExit("ERROR: injected blob is not valid JSON: " + str(e))
 
-# Now atomic-ish: write both files. Dashboard first so a mid-write crash
-# leaves the old cache.json visible (consistent-ish) rather than a fresh
-# cache.json with a stale dashboard.
+# Atomic-ish writes: dashboard first, then cache.
 with open(dash_path, "w", encoding="utf-8") as f:
     f.write(updated)
-with open(os.path.join(home, "cache.json"), "w", encoding="utf-8") as f:
+with open(cache_path, "w", encoding="utf-8") as f:
     json.dump(data, f, ensure_ascii=False, indent=2)
 
-m = sum(len(q.get("results", [])) for q in sr["mentions"])
-d = sum(len(q.get("results", [])) for q in sr["dms"])
-c = sum(len(q.get("results", [])) for q in sr["channels"])
-print("refreshed_at=" + data["refreshed_at"]
-      + ", threads=" + str(len(threads))
-      + ", mentions=" + str(m)
-      + ", dms=" + str(d)
-      + ", channels=" + str(c))
+m_count = sum(len(q.get("results", [])) for q in sr["mentions"])
+d_count = sum(len(q.get("results", [])) for q in sr["dms"])
+c_count = sum(len(q.get("results", [])) for q in sr["channels"])
+print("mode=" + mode
+      + ", refreshed_at=" + data["refreshed_at"]
+      + ", threads=" + str(len(threads_new))
+      + ", mentions=" + str(m_count)
+      + ", dms=" + str(d_count)
+      + ", channels=" + str(c_count))
 
-# 3. Clean up tmp
 try:
     os.remove(tmp)
 except OSError:
@@ -305,6 +407,15 @@ Then continue to Step 4.
 
 ## Step 4 — Report
 
-Tell the user (one sentence):
+Tell the user (one sentence). Tailor wording to mode:
 
-> SlackLens refreshed — `<N>` threads, `<M>` mentions, `<D>` DMs, `<C>` channel mentions. Last update `<HH:MM>`.
+**DELTA mode:**
+
+> SlackLens refreshed (delta, since `<HH:MM>`) — `<N>` threads,
+> `<M>` mentions, `<D>` DMs, `<C>` channel mentions. Say "deep
+> refresh slacklens" if you suspect the cache has drifted.
+
+**FULL mode:**
+
+> SlackLens refreshed (full 48h) — `<N>` threads, `<M>` mentions,
+> `<D>` DMs, `<C>` channel mentions. Last update `<HH:MM>`.
