@@ -973,8 +973,49 @@ function bootDensity() {
   });
 }
 
+// ========================================================================
+// Theme toggle (slacklens.theme: 'auto' | 'light' | 'dark'; default 'auto')
+// ========================================================================
+const THEME_KEY = 'slacklens.theme';
+const THEME_CYCLE = ['auto', 'light', 'dark'];
+
+function currentSystemTheme() {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function applyTheme(t) {
+  if (!THEME_CYCLE.includes(t)) t = 'auto';
+  const effective = (t === 'auto') ? currentSystemTheme() : t;
+  if (effective === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  else                       document.documentElement.removeAttribute('data-theme');
+  const btn = document.getElementById('themeToggle');
+  if (btn) {
+    btn.textContent = (effective === 'dark') ? '☼' : '☾';
+    btn.title = 'Theme: ' + t + ' (click to cycle)';
+  }
+  try { localStorage.setItem(THEME_KEY, t); } catch (_) {}
+}
+
+function bootTheme() {
+  let t;
+  try { t = localStorage.getItem(THEME_KEY); } catch (_) { t = null; }
+  applyTheme(t || 'auto');
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.addEventListener('click', () => {
+    const current = localStorage.getItem(THEME_KEY) || 'auto';
+    const next = THEME_CYCLE[(THEME_CYCLE.indexOf(current) + 1) % THEME_CYCLE.length];
+    applyTheme(next);
+  });
+  // Respond to system changes while on auto
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    const current = localStorage.getItem(THEME_KEY) || 'auto';
+    if (current === 'auto') applyTheme('auto');
+  });
+}
+
 // ---------- Wire up ----------
 bootDensity();
+bootTheme();
 loadCache();
 
 // ── Side panel — stubs; wired in Task 3 ──
