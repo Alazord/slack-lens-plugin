@@ -31,7 +31,8 @@ v0.X.0 distribution bump. If any box is unchecked, don't ship.
 ## Steady state
 
 - [ ] Say `refresh slacklens`. **Zero** permission prompts. Cache
-      updates, browser tab reloads (or Cowork panel shows updated).
+      updates; reload the browser tab (or your runtime's side panel
+      if it has one) to see the new data.
 - [ ] Say `open slacklens`. Browser tab opens (or focuses).
 - [ ] Run `~/.claude/plugins/cache/alazord/slacklens/scripts/privacy-check.py`
       against the installed plugin cache — exit 0. (Optional, for
@@ -47,8 +48,8 @@ v0.X.0 distribution bump. If any box is unchecked, don't ship.
 
 ## Scheduled task
 
-- [ ] Look up scheduled tasks (via whatever Cowork/CLI surface you
-      use). Task `slacklens-refresh` is registered with cron
+- [ ] Look up scheduled tasks (via whatever runtime surface exposes
+      them). Task `slacklens-refresh` is registered with cron
       `0 */8 * * *`.
 
 ## Repo hygiene (maintainer only)

@@ -1,6 +1,6 @@
 ---
 name: slacklens-open
-description: Opens the SlackLens dashboard in the user's default browser and presents it in the Cowork panel. Use when the user says "open slacklens", "open slack lens", "show slacklens", "open my slack triage", or "show my slack dashboard".
+description: Opens the SlackLens dashboard in the user's default browser. If the Claude Code runtime exposes a side panel (e.g. Cowork, via the cowork MCP's present_files tool), also presents it there. Use when the user says "open slacklens", "open slack lens", "show slacklens", "open my slack triage", or "show my slack dashboard".
 ---
 
 You are opening the SlackLens dashboard.
@@ -26,17 +26,19 @@ If the file is missing, tell the user:
 open "$HOME/.slacklens/dashboard.html"
 ```
 
-## Step 3 — Present in Cowork
+## Step 3 — Also present in a side panel (optional)
 
-Call the `present_files` tool from the cowork MCP with the path
-`~/.slacklens/dashboard.html` so the dashboard is also available in
-the Cowork side panel.
+If the Cowork MCP is connected, call the `present_files` tool with the
+path `~/.slacklens/dashboard.html` so the dashboard also shows up in
+the side panel. This is purely a UX polish — the browser open in
+Step 2 is the primary surface.
 
-If `present_files` is unavailable, emit this one-line note —
-**do not silently skip**:
+If `present_files` is unavailable (most Claude Code runtimes — CLI,
+IDE extensions, etc.), emit this one-line note and continue — do NOT
+treat it as an error:
 
-> Cowork `present_files` not available — dashboard opened in your
-> browser only.
+> Side-panel present_files not available in this runtime — dashboard
+> opened in your browser only.
 
 Then continue to Step 4.
 

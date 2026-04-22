@@ -247,19 +247,22 @@ except OSError:
 PY
 ```
 
-## Step 3 — Surface the dashboard in Cowork
+## Step 3 — Also present in a side panel (optional)
 
-Call the `present_files` tool from the cowork MCP with the path
-`~/.slacklens/dashboard.html` so the dashboard appears in the Cowork
-panel.
+If the Cowork MCP is connected, call its `present_files` tool with
+the path `~/.slacklens/dashboard.html` so the dashboard also shows up
+in the side panel. This is purely a UX polish — the primary surface
+is the on-disk HTML file, which any browser (or panel-enabled runtime)
+can render independently.
 
-If `present_files` is unavailable in this session (e.g. when running
-from a scheduled task), emit a one-line note to the chat output —
-**do not silently skip**:
+If `present_files` is unavailable in this session (most Claude Code
+runtimes don't ship it, and scheduled-task invocations don't have a
+panel at all), emit a one-line note and continue — do NOT treat it as
+an error:
 
-> Cowork `present_files` not available in this session — dashboard is
-> still on disk at `~/.slacklens/dashboard.html`; open it manually or
-> reload an existing browser tab.
+> Side-panel present_files not available in this session — dashboard
+> is still on disk at `~/.slacklens/dashboard.html`; open it manually
+> or reload an existing browser tab.
 
 Then continue to Step 4.
 

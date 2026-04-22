@@ -25,8 +25,10 @@ For each call, if it fails with "MCP not connected", "tool not found",
 > before setup can run. The `<tool name>` tool is missing or the
 > connector is not authorised.
 >
-> Open Cowork → Settings → Connectors → Slack → Connect, make sure
-> it's up to date, then send "set up slack lens" again.
+> Connect Slack to your Claude Code runtime (Cowork: Settings →
+> Connectors → Slack → Connect. CLI: `claude mcp add slack ...` per
+> the Slack MCP docs). Make sure it's up to date, then send "set up
+> slack lens" again.
 
 Do not try to continue if any of the four probes fails this way.
 
@@ -152,14 +154,14 @@ with open(os.path.join(home_dir, "config.json"), "w") as f:
 
 # Copy the bundled dashboard template into the user's data dir.
 # Sanity-check that CLAUDE_PLUGIN_ROOT is populated and the template exists
-# before we copy — if Cowork didn't set the env var, shutil.copy would fail
-# with a confusing error that hides the real cause.
+# before we copy — if the runtime didn't set the env var, shutil.copy would
+# fail with a confusing error that hides the real cause.
 plugin_root = os.environ.get("PLUGIN_ROOT", "").strip()
 if not plugin_root:
     raise SystemExit(
         "ERROR: $CLAUDE_PLUGIN_ROOT is not set. "
         "The plugin runtime should populate this — make sure slacklens is "
-        "installed as a Cowork plugin (not cloned and run manually)."
+        "installed via `/plugin install`, not cloned and run manually."
     )
 src = os.path.join(plugin_root, "skills", "slacklens-refresh",
                    "references", "dashboard.template.html")
@@ -262,7 +264,7 @@ will render from the empty-cache state and show the empty-state banner.
 ## Step 7 — Open the dashboard
 
 Run the `slacklens-open` skill so the dashboard opens in the user's
-browser AND is presented in Cowork.
+browser (and in any runtime side panel that supports `present_files`).
 
 ## Step 8 — Confirm
 
