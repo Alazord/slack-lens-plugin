@@ -227,9 +227,20 @@ available), catch it and continue — don't fail setup over a re-registration.
 
 ## Step 6 — Trigger the first refresh
 
-Run the `slacklens-refresh` skill now (in this same session) so the user
-sees data immediately. Wait for it to finish. If it fails, surface the
-error clearly — do not pretend setup succeeded.
+Run the `slacklens-refresh` skill now (in this same session) so the
+user sees data immediately. Wait for it to finish.
+
+If the refresh fails — typically because the Slack MCP is rate-limited
+from the Step 0 probes — **do not abort setup**. Config, dashboard
+template, and the auto-refresh scheduled task are all already in place;
+the next scheduled tick will pick up. Tell the user clearly:
+
+> Setup is complete, <USER_NAME>, but the first refresh failed:
+> `<error message>`. Say `refresh slacklens` in a minute, or wait for
+> the scheduled refresh.
+
+Then proceed to Step 7 (open the dashboard) regardless — the dashboard
+will render from the empty-cache state and show the empty-state banner.
 
 ## Step 7 — Open the dashboard
 
