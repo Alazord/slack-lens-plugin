@@ -953,13 +953,27 @@ function normalize() {
   items.sort((a, b) => (b.last_time || '').localeCompare(a.last_time || ''));
 }
 
+// Escape a string so it can be embedded safely in a RegExp source.
+function reEscape(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// Slack IDs (U01…, C01…) are unique — safe to substring-match.
+// Names must be word-bounded: plain substring match would let "Ann" hit
+// "Annie" and promote unrelated threads into the VIP band, and let a user
+// "Sam" match every message from "Samantha". `\b` is ASCII-only in JS, which
+// is good enough for the English-Latin Slack names we see in practice.
+function nameMatches(name, s) {
+  if (!name || !s) return false;
+  return new RegExp('\\b' + reEscape(name) + '\\b', 'i').test(s);
+}
 function isMe(s) {
   if (!s) return false;
-  return (ME_ID && s.includes(ME_ID)) || (ME_NAME && s.includes(ME_NAME));
+  if (ME_ID && s.includes(ME_ID)) return true;
+  return nameMatches(ME_NAME, s);
 }
 function isVIP(s) {
   if (!s) return false;
-  return VIP_IDS.some(id => s.includes(id)) || VIP_NAMES.some(n => s.includes(n));
+  if (VIP_IDS.some(id => id && s.includes(id))) return true;
+  return VIP_NAMES.some(n => nameMatches(n, s));
 }
 function threadHasVIP(it) {
   // Check last_from, participants, channel_display for any VIP
