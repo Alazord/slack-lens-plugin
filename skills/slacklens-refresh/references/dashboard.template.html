@@ -598,6 +598,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   content: "☾"; position: absolute; left: 3px; top: -10px;
   font-size: 9px; color: var(--ink-faint);
 }
+
+/* Keyboard-navigation focus on item rows */
+.sl-item[data-kb-focus="1"] {
+  background: var(--surface-2);
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
 </style>
 </head>
 <body>
@@ -1372,11 +1379,61 @@ function bootTheme() {
   });
 }
 
+// ========================================================================
+// Keyboard shortcuts
+//   /  focus search     R  reload       T  cycle theme     D  cycle density
+//   ESC close panel / clear focused input
+//   J/K  next/prev item (nice-to-have)
+// ========================================================================
+function bootKeyboard() {
+  document.addEventListener('keydown', e => {
+    const active = document.activeElement;
+    const inInput = active && ['INPUT', 'TEXTAREA'].includes(active.tagName);
+
+    if (e.key === 'Escape') {
+      if (inInput) active.blur();
+      // side panel ESC is handled by bootSidePanel's own listener
+      return;
+    }
+    if (inInput) return;
+
+    if (e.key === '/') { e.preventDefault(); const si = document.getElementById('searchInput'); if (si) si.focus(); return; }
+    if (e.key === 'r' || e.key === 'R') { e.preventDefault(); loadCache(); return; }
+    if (e.key === 't' || e.key === 'T') {
+      e.preventDefault();
+      const current = localStorage.getItem(THEME_KEY) || 'auto';
+      const next = THEME_CYCLE[(THEME_CYCLE.indexOf(current) + 1) % THEME_CYCLE.length];
+      applyTheme(next);
+      return;
+    }
+    if (e.key === 'd' || e.key === 'D') {
+      e.preventDefault();
+      const current = localStorage.getItem(DENSITY_KEY) || 'balanced';
+      const next = DENSITY_VALUES[(DENSITY_VALUES.indexOf(current) + 1) % DENSITY_VALUES.length];
+      applyDensity(next);
+      return;
+    }
+    if (e.key === 'j' || e.key === 'k') {
+      e.preventDefault();
+      const rows = Array.from(document.querySelectorAll('.sl-item'));
+      if (!rows.length) return;
+      const focused = document.querySelector('.sl-item[data-kb-focus="1"]');
+      let idx = focused ? rows.indexOf(focused) : -1;
+      rows.forEach(r => r.removeAttribute('data-kb-focus'));
+      idx = (e.key === 'j') ? Math.min(idx + 1, rows.length - 1) : Math.max(idx - 1, 0);
+      const next = rows[Math.max(0, idx)];
+      next.setAttribute('data-kb-focus', '1');
+      next.scrollIntoView({ block: 'nearest' });
+    }
+  });
+}
+
 // ---------- Wire up ----------
 bootDensity();
 bootTheme();
 bootFilters();
 bootSidePanel();
+bootKeyboard();
 loadCache();
 
 // ========================================================================
