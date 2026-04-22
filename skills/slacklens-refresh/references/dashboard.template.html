@@ -472,80 +472,89 @@ footer {
 </style>
 </head>
 <body>
-
-<div class="header">
-  <div class="logo">Slack Triage<span class="dot">.</span><span class="sub">live</span></div>
-  <div class="header-ts" id="freshness">Loading cache…</div>
-  <div class="stat-tabs" id="statTabs"></div>
-  <button class="btn" id="btnRefresh" title="Fetch fresh Slack data and reload dashboard">
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 8a6 6 0 0 1 10.5-4M14 8a6 6 0 0 1-10.5 4"/><path d="M13 2v3h-3M3 14v-3h3"/></svg>
-    Reload cache
-  </button>
-</div>
-
-<div class="filters">
-  <button class="pill active" data-scope="all">All</button>
-  <button class="pill" data-scope="mentions">Mentions of me</button>
-  <button class="pill" data-scope="awaiting">Needs my reply</button>
-  <button class="pill" data-scope="dm">DMs</button>
-  <button class="pill" data-scope="channels">Channels</button>
-  <span class="pill-divider"></span>
-  <button class="pill" data-status="BACKLOG"><span class="dot" style="background:var(--red)"></span>Backlog</button>
-  <button class="pill" data-status="IN PROGRESS"><span class="dot" style="background:var(--orange)"></span>In progress</button>
-  <button class="pill" data-status="WAITING"><span class="dot" style="background:var(--blue)"></span>Waiting</button>
-  <button class="pill" data-status="DONE"><span class="dot" style="background:var(--green)"></span>Done</button>
-  <span class="pill-divider"></span>
-  <input class="search" id="search" placeholder="Search channel, person, text…"/>
-  <button class="pill" id="showSnoozed">Show snoozed</button>
-</div>
-
-<div class="notice info" id="notice"></div>
-
-<div class="body">
-  <div class="section">
-    <div class="section-head">
-      <div class="section-title">Leadership &amp; Groups</div>
-      <div class="section-count" id="replyCount">—</div>
+  <!-- Topbar: wordmark · freshness · theme toggle · reload -->
+  <header class="sl-topbar">
+    <div class="sl-brand">SlackLens</div>
+    <div class="sl-topbar-right">
+      <div id="freshness" class="sl-fresh">0 · loading…</div>
+      <button id="themeToggle" class="sl-iconbtn" type="button" aria-label="Toggle theme">☾</button>
+      <button id="reloadBtn" class="sl-reload" type="button">↻ Reload</button>
     </div>
-    <div id="replyList"></div>
-  </div>
-  <div class="section">
-    <div class="section-head">
-      <div class="section-title">DMs</div>
-      <div class="section-count" id="otherCount">—</div>
-    </div>
-    <div id="otherList"></div>
+  </header>
 
-    <details class="panel" style="margin-top:18px;">
-      <summary style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;padding:2px 0;">
-        <h3 style="margin:0;">Cache &amp; schedule</h3>
-        <span style="font-size:10px;color:var(--muted);">▾ expand</span>
-      </summary>
-      <div style="margin-top:10px;">
-        <div class="kv"><span>Last refresh</span><span id="cRefresh">—</span></div>
-        <div class="kv"><span>Threads tracked</span><span id="cThreads">—</span></div>
-        <div class="kv"><span>Mentions (last 48h)</span><span id="cMentions">—</span></div>
-        <div class="kv"><span>Your sent DMs</span><span id="cDms">—</span></div>
-        <div class="kv"><span>Your channel msgs</span><span id="cChan">—</span></div>
-        <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">
-          <div class="tasklist-sched"><span class="tid">slack-cache-refresh</span><span class="nx">10:50 &amp; 19:50 daily</span></div>
-          <div class="tasklist-sched"><span class="tid">slack-reply-queue-morning</span><span class="nx">11:00 daily</span></div>
-          <div class="tasklist-sched"><span class="tid">slack-reply-queue-evening</span><span class="nx">20:00 daily</span></div>
-          <div class="tasklist-sched"><span class="tid">slack-dashboard-refresh</span><span class="nx">manual</span></div>
-        </div>
-        <div class="instructions" style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">
-          Refreshed by the <b>slacklens-refresh</b> skill (every 8 hours, or on demand). Click <b>Reload cache</b> to pull the latest on-disk cache.
-          Run <code>slack-dashboard-refresh</code> to fetch fresh Slack data.
-          Status, notes and snoozes are saved locally in your browser.
-        </div>
+  <!-- Toolbar: category filters · status filters · search · density · snoozed -->
+  <nav class="sl-toolbar" aria-label="Filters and controls">
+    <div class="sl-pills" id="categoryPills" role="radiogroup" aria-label="Category filter">
+      <button class="sl-pill active" data-scope="all"         type="button">All <span class="count">0</span></button>
+      <button class="sl-pill"        data-scope="needs_reply" type="button">Needs reply <span class="count">0</span></button>
+      <button class="sl-pill"        data-scope="mentions"    type="button">Mentions <span class="count">0</span></button>
+      <button class="sl-pill"        data-scope="dms"         type="button">DMs <span class="count">0</span></button>
+      <button class="sl-pill"        data-scope="channels"    type="button">Channels <span class="count">0</span></button>
+    </div>
+    <div class="sl-divider"></div>
+    <div class="sl-pills" id="statusPills" aria-label="Status filter">
+      <button class="sl-pill" data-status="BACKLOG"     type="button">Backlog</button>
+      <button class="sl-pill" data-status="IN PROGRESS" type="button">In progress</button>
+      <button class="sl-pill" data-status="WAITING"     type="button">Waiting</button>
+      <button class="sl-pill" data-status="DONE"        type="button">Done</button>
+    </div>
+    <div class="sl-divider"></div>
+    <label class="sl-search">
+      <span class="icon" aria-hidden="true">⌕</span>
+      <input id="searchInput" type="text" placeholder="Search channel, person, text…" />
+    </label>
+    <div class="sl-density" role="radiogroup" aria-label="Density">
+      <button class="sl-density-btn" data-density="compact"  type="button">Compact</button>
+      <button class="sl-density-btn active" data-density="balanced" type="button">Balanced</button>
+      <button class="sl-density-btn" data-density="spacious" type="button">Spacious</button>
+    </div>
+    <label class="sl-switch" id="showSnoozedLabel">
+      <input id="showSnoozed" type="checkbox" />
+      <span class="track"></span>
+      <span class="label">Show snoozed</span>
+    </label>
+  </nav>
+
+  <!-- Banner: stale cache / schema mismatch / fetch-failed -->
+  <div id="banner" class="sl-banner" hidden></div>
+
+  <!-- Channel flow: all channel groups render here, VIPs floated first -->
+  <main id="channelFlow" class="sl-flow" aria-label="Channels"></main>
+
+  <!-- Empty state container (shown when nothing renders) -->
+  <div id="emptyState" class="sl-empty" hidden></div>
+
+  <footer class="sl-footer">
+    <span>Cowork live artifact · data: <code>~/.slacklens/cache.json</code></span>
+  </footer>
+
+  <!-- Side panel (BELOW all interactive content, ABOVE the script tag) -->
+  <aside id="sidePanel" class="sl-panel" hidden aria-label="Thread detail">
+    <div class="sl-panel-head">
+      <div class="sl-panel-title">
+        <span id="panelChannel"></span>
+        <span id="panelVip" class="sl-vip" hidden>VIP</span>
       </div>
-    </details>
-  </div>
-</div>
-
-<footer>
-  <span id="footerNote">Cowork live artifact · data: ./slack-triage-cache.json</span>
-</footer>
+      <button id="panelClose" class="sl-iconbtn" type="button" aria-label="Close panel">✕</button>
+    </div>
+    <div class="sl-panel-meta">
+      <div><span class="k">Channel</span><span id="panelChannelType"></span></div>
+      <div><span class="k">Status</span><span id="panelStatus"></span></div>
+    </div>
+    <div class="sl-panel-actions">
+      <button id="actStatus"  class="sl-btn" type="button">◐ Status ▾</button>
+      <button id="actSnooze"  class="sl-btn" type="button">☾ Snooze ▾</button>
+      <button id="actDone"    class="sl-btn" type="button">✓ Mark done</button>
+      <button id="actOpen"    class="sl-btn primary" type="button">↗ Open in Slack</button>
+      <button id="actCopy"    class="sl-btn" type="button">⎘ Copy permalink</button>
+    </div>
+    <div id="panelThread" class="sl-panel-thread"></div>
+    <div class="sl-panel-note">
+      <div class="sl-note-label">Note</div>
+      <textarea id="panelNote" placeholder="Add a private note about this thread (saved locally)"></textarea>
+    </div>
+  </aside>
+  <div id="panelBackdrop" class="sl-panel-backdrop" hidden></div>
 
 <script>
 // ---------- Inlined cache (works under file://) ----------
@@ -793,66 +802,11 @@ function inferStatus({channel_name, lastIsMe, lastText, msgs}) {
 
 // ---------- Rendering ----------
 function render() {
-  // Freshness + counts
-  const refreshed = raw && raw.refreshed_at;
-  document.getElementById('freshness').innerHTML =
-    refreshed ? ('Cache: <b>' + fmtRelative(refreshed) + '</b> · ' + fmtHuman(refreshed)) : 'No cache loaded';
-  document.getElementById('cRefresh').textContent = refreshed ? fmtHuman(refreshed) : '—';
-  document.getElementById('cThreads').textContent = raw && raw.threads ? Object.keys(raw.threads).length : 0;
-  document.getElementById('cMentions').textContent = sumResults(raw, 'mentions');
-  document.getElementById('cDms').textContent = sumResults(raw, 'dms');
-  document.getElementById('cChan').textContent = sumResults(raw, 'channels');
-
-  // Stat tabs
-  const tabs = [
-    {id:'all', label:'All', n: items.length, cls:''},
-    {id:'awaiting', label:'Needs reply', n: items.filter(i => effectiveItem(i).needs_reply).length, cls:'s-amber'},
-    {id:'mentions', label:'Mentions', n: items.filter(i => i.source === 'mention' || i.mention_preview).length, cls:'s-blue'},
-    {id:'dm', label:'DMs', n: items.filter(i => i.kind === 'dm').length, cls:'s-purple'},
-    {id:'channels', label:'Channels', n: items.filter(i => i.kind === 'channel').length, cls:'s-orange'},
-  ];
-  const st = document.getElementById('statTabs');
-  st.innerHTML = '';
-  tabs.forEach(t => {
-    const b = document.createElement('button');
-    b.className = 'stab ' + t.cls + (filter.scope === t.id ? ' active' : '');
-    b.innerHTML = `<span class="n">${t.n}</span> ${t.label}`;
-    b.onclick = () => { filter.scope = t.id; syncFilterPills(); render(); };
-    st.appendChild(b);
-  });
-
-  // Items
-  const replyList = document.getElementById('replyList');
-  const otherList = document.getElementById('otherList');
-  replyList.innerHTML = '';
-  otherList.innerHTML = '';
-
-  const shown = items.filter(passFilter);
-
-  // Left col: channels + VIP threads + group DMs, sorted by last_time desc
-  const leftItems = shown.filter(i => {
-    if (i.kind === 'channel') return true;
-    if (threadHasVIP(i)) return true;
-    if ((i.channel_name||'').toLowerCase().startsWith('group dm')) return true;
-    return false;
-  }).sort((a,b) => b.last_time > a.last_time ? 1 : -1);
-
-  // Right col: 1:1 DMs only (not group dm, not VIP), sorted by last_time desc
-  const rightItems = shown.filter(i => {
-    if (i.kind !== 'dm') return false;
-    if (threadHasVIP(i)) return false;
-    if ((i.channel_name||'').toLowerCase().startsWith('group dm')) return false;
-    return true;
-  }).sort((a,b) => b.last_time > a.last_time ? 1 : -1);
-
-  renderGrouped(replyList, leftItems, 'project');
-  renderGrouped(otherList, rightItems, 'needs_reply');
-
-  document.getElementById('replyCount').textContent = leftItems.length + ' item' + (leftItems.length===1?'':'s');
-  document.getElementById('otherCount').textContent = rightItems.length + ' item' + (rightItems.length===1?'':'s');
-
-  if (!leftItems.length) replyList.innerHTML = '<div class="empty">No threads in Leadership &amp; Groups.</div>';
-  if (!rightItems.length) otherList.innerHTML = '<div class="empty">No DMs.</div>';
+  // Stubbed during redesign — Task 3 replaces this.
+  const flow = document.getElementById('channelFlow');
+  if (flow) flow.textContent = 'Render pending — Task 3 wiring';
+  const f = document.getElementById('freshness');
+  if (f && raw && raw.refreshed_at) f.textContent = raw.refreshed_at;
 }
 
 function renderGrouped(container, arr, groupBy) {
@@ -1034,139 +988,25 @@ function escapeHtml(s) {
   return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function setNotice(html, kind) {
-  const n = document.getElementById('notice');
-  if (!html) { n.classList.remove('show'); return; }
-  n.className = 'notice ' + (kind || 'info') + ' show';
-  n.innerHTML = html;
+  // Stubbed during redesign — banner wired in Task 3.
+  // (old id 'notice' is gone; new id is 'banner')
 }
 
 // ---------- Wire up ----------
-document.getElementById('btnRefresh').addEventListener('click', () => {
-  // Plugin variant: there is no local server. The cache lives in
-  // ~/.slacklens/dashboard.html and is rewritten by the slacklens-refresh
-  // skill (run automatically every 8 hours, or on demand from Cowork).
-  // The button reloads the page so any fresh cache on disk is picked up,
-  // and reminds the user how to force a refresh.
-  const btn = document.getElementById('btnRefresh');
-  btn.disabled = true;
-  setNotice('To fetch fresh Slack data, open Cowork and say <b>refresh slack lens</b>. Reloading the on-disk cache now\u2026', 'info');
-  setTimeout(() => { location.reload(); }, 1200);
-});
-document.getElementById('search').addEventListener('input', (e) => {
-  filter.query = e.target.value.trim();
-  render();
-});
-document.querySelectorAll('.pill[data-scope]').forEach(p => {
-  p.addEventListener('click', () => { filter.scope = p.dataset.scope; render(); syncFilterPills(); });
-});
-document.querySelectorAll('.pill[data-status]').forEach(p => {
-  p.addEventListener('click', () => {
-    filter.status = (filter.status === p.dataset.status) ? null : p.dataset.status;
-    render(); syncFilterPills();
-  });
-});
-document.getElementById('showSnoozed').addEventListener('click', () => {
-  filter.showSnoozed = !filter.showSnoozed; render(); syncFilterPills();
-});
-
 loadCache();
 
-// ── Side panel ──
+// ── Side panel — stubs; wired in Task 3 ──
 let panelItem = null;
 
 function openPanel(it) {
+  // Stubbed during redesign — Task 3 wires this to the new markup.
   panelItem = it;
-  const ov = overrideFor(it.key);
-  const eff = effectiveItem(it);
-
-  document.getElementById('sidePanelTitle').textContent = it.last_from || it.channel_display;
-  document.getElementById('sidePanelSub').textContent = it.channel_display + (it.msg_count > 1 ? ' · ' + it.msg_count + ' msgs' : '');
-
-  // Status select
-  const sel = document.getElementById('addonStatus');
-  sel.innerHTML = STATUSES.map(s => `<option value="${s}"${s === eff.status ? ' selected' : ''}>${s}</option>`).join('');
-  sel.className = 'addon-status';
-
-  // Note
-  document.getElementById('addonNote').value = ov.note || '';
-
-  // Snooze button
-  const snoozeBtn = document.getElementById('addonSnooze');
-  snoozeBtn.textContent = ov.snoozed ? 'Unsnooze' : 'Snooze';
-  snoozeBtn.className = 'addon-btn' + (ov.snoozed ? ' snooze-active' : '');
-
-  document.getElementById('sidePanel').classList.add('open');
 }
 
 function closePanel() {
-  // Save note on close
-  if (panelItem) {
-    const note = document.getElementById('addonNote').value.trim();
-    if (note) overrideFor(panelItem.key).note = note;
-    else delete overrideFor(panelItem.key).note;
-    saveOverrides();
-    render();
-  }
-  document.getElementById('sidePanel').classList.remove('open');
+  // Stubbed during redesign — Task 3 wires this to the new markup.
   panelItem = null;
 }
-
-document.getElementById('sidePanelClose').addEventListener('click', closePanel);
-document.getElementById('sidePanelBackdrop').addEventListener('click', closePanel);
-
-document.getElementById('addonStatus').addEventListener('change', e => {
-  if (!panelItem) return;
-  const v = e.target.value;
-  overrideFor(panelItem.key).status = v;
-  overrideFor(panelItem.key).needs_reply = ['AWAITING YOUR REPLY','BACKLOG','IN PROGRESS'].includes(v);
-  saveOverrides();
-});
-
-document.getElementById('addonSnooze').addEventListener('click', () => {
-  if (!panelItem) return;
-  const ov = overrideFor(panelItem.key);
-  ov.snoozed = !ov.snoozed;
-  saveOverrides();
-  const btn = document.getElementById('addonSnooze');
-  btn.textContent = ov.snoozed ? 'Unsnooze' : 'Snooze';
-  btn.className = 'addon-btn' + (ov.snoozed ? ' snooze-active' : '');
-});
-
-document.getElementById('addonReset').addEventListener('click', () => {
-  if (!panelItem) return;
-  delete overrides[panelItem.key];
-  saveOverrides();
-  closePanel();
-  render();
-});
 </script>
-
-<div class="side-panel-overlay" id="sidePanel">
-  <div class="side-panel-backdrop" id="sidePanelBackdrop"></div>
-  <div class="side-panel">
-    <div class="side-panel-head">
-      <div>
-        <div class="side-panel-title" id="sidePanelTitle">Thread</div>
-        <div class="side-panel-sub" id="sidePanelSub"></div>
-      </div>
-      <button class="side-panel-close" id="sidePanelClose">&#x2715;</button>
-    </div>
-    <div class="side-panel-body">
-      <div class="addon-section">
-        <div class="addon-label">Status</div>
-        <select class="addon-status" id="addonStatus"></select>
-      </div>
-      <div class="addon-section">
-        <div class="addon-label">Note</div>
-        <textarea class="addon-note" id="addonNote" placeholder="Add a note — saved in your browser"></textarea>
-      </div>
-      <div class="addon-section">
-        <div class="addon-label">Actions</div>
-        <button class="addon-btn" id="addonSnooze">Snooze</button>
-        <button class="addon-btn danger" id="addonReset" style="margin-top:6px;">Reset overrides</button>
-      </div>
-    </div>
-  </div>
-</div>
 </body>
 </html>
