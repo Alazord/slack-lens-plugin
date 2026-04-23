@@ -1146,6 +1146,18 @@ function normalize() {
       lastIsMe, lastText, msgs
     });
 
+    // vip_tagged_me: did any VIP send a message in this thread that tags
+    // my Slack ID? That's the P0 signal — VIP actively addressing me as
+    // opposed to being just present. Checked per-message because we need
+    // to pair "sender is VIP" with "this same message tagged me"; the
+    // union field `mentioned_ids_all` can't carry that pairing.
+    let vipTaggedMe = false;
+    for (const msg of msgs) {
+      const senderId = msgUserId(msg);
+      if (!senderId || !VIP_IDS.includes(senderId)) continue;
+      if (msgMentions(msg).includes(ME_ID)) { vipTaggedMe = true; break; }
+    }
+
     items.push({
       key,
       kind: kindFromChannel(t.channel_name, t.channel_id),
@@ -1167,6 +1179,7 @@ function normalize() {
       participant_ids: Array.from(new Set(msgs.map(msgUserId))).filter(Boolean),
       last_from_id: last ? msgUserId(last) : '',
       mentioned_ids_all: Array.from(new Set(msgs.flatMap(msgMentions))).filter(Boolean),
+      vip_tagged_me: vipTaggedMe,
       status: derived.status,
       needs_reply: derived.needs_reply,
       source: 'thread',
@@ -1193,9 +1206,13 @@ function normalize() {
     if (!m.permalink) return;
     if (threadPermalinks.has(m.permalink)) return;
     if (seen.has(m.permalink)) return; seen.add(m.permalink);
-    const lastIsMe = isMe(m.from_user);
+    const lastIsMe   = isMe(m.from_user);
     const senderId   = resultUserId(m);
     const mentioned  = resultMentions(m);
+    // Same P0 signal as for thread items, but here we have exactly one
+    // message, so the pair-check is trivial: is the sender VIP AND does
+    // that message tag me?
+    const vipTaggedMe = Boolean(senderId && VIP_IDS.includes(senderId) && mentioned.includes(ME_ID));
     items.push({
       key: m.permalink,
       kind: kindFromChannel(m.channel_name, m.channel_id),
@@ -1216,6 +1233,7 @@ function normalize() {
       participant_ids: senderId ? [senderId] : [],
       last_from_id: senderId,
       mentioned_ids_all: mentioned,
+      vip_tagged_me: vipTaggedMe,
       // Outgoing DMs (dms bucket) have last_from == me; the thread
       // ball is in the other person's court. Incoming messages keep
       // the "AWAITING YOUR REPLY" default.
@@ -1227,10 +1245,82 @@ function normalize() {
 
   items.forEach(it => {
     it.channel_key = it.channel_id;
-    it.channel_is_vip = threadHasVIP(it);
+    it.tier = inferTier(it);
+    // channel_is_vip now reflects "VIP anywhere in conversation" (P0 or P1).
+    // Partitioning still treats this as "goes to VIP band"; tier-aware
+    // ordering inside the band comes from the score-based sort below.
+    it.channel_is_vip = it.tier === 'P0' || it.tier === 'P1';
+    it.score = computeScore(it);
   });
 
-  items.sort((a, b) => (b.last_ts || 0) - (a.last_ts || 0));
+  // Sort by composite score desc — tier dominates (P0=1000, P1=500,
+  // P2=250, P3=100); recency (0-99) breaks ties within a tier.
+  // DONE/snoozed items carry a -2000 penalty (see computeScore) so they
+  // always sink to the bottom regardless of tier.
+  items.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.last_ts || 0) - (a.last_ts || 0));
+}
+
+// === Priority tiers ====================================================
+// P0 (1000): VIP actively addresses me — DM from VIP, or VIP tagged me
+//            in a channel/thread. Explicit ball-in-my-court signal.
+// P1  (500): VIP passively present — in the conversation (posted or CC'd)
+//            but didn't directly tag me.
+// P2  (250): Normal channel/thread mention without any VIP involvement.
+// P3  (100): Normal 1:1 DM with no VIP.
+const TIER_BASE = { P0: 1000, P1: 500, P2: 250, P3: 100 };
+
+function inferTier(it) {
+  const myId   = ME_ID || '';
+  const vipIds = VIP_IDS || [];
+
+  // P0 — active address:
+  //   (a) flag set at normalize time: some VIP's own message tagged me.
+  //   (b) 1:1 DM and the other party is a VIP (structured IDs path).
+  //   (c) Fallback for pre-v2 caches with no participant_ids: name-based
+  //       VIP check on a 1:1 DM channel_display.
+  if (it.vip_tagged_me) return 'P0';
+  const is1on1Dm = it.kind === 'dm' && !isGroupDM(it.channel_name);
+  if (is1on1Dm) {
+    const others = (it.participant_ids || []).filter(id => id && id !== myId);
+    if (others.some(id => vipIds.includes(id))) return 'P0';
+    // v1-cache fallback: channel_display is "@Name" on DMs and the
+    // DM-only match survived T1d's false-positive fix.
+    if (others.length === 0 && isVIP(it.channel_display)) return 'P0';
+  }
+
+  // P1 — VIP anywhere in the conversation but not the direct addresser.
+  if (isVIPAnywhere(it)) return 'P1';
+
+  // P2 / P3 split by surface: DM channels default to P3, everything
+  // else (public/private channels + group DMs) is P2.
+  return is1on1Dm ? 'P3' : 'P2';
+}
+
+function isVIPAnywhere(it) {
+  const vipIds = VIP_IDS || [];
+  const pIds   = it.participant_ids   || [];
+  const mIds   = it.mentioned_ids_all || [];
+  if (pIds.some(id => vipIds.includes(id))) return true;
+  if (mIds.some(id => vipIds.includes(id))) return true;
+  // v1-cache fallback: name-based participant check.
+  if (isVIP(it.last_from)) return true;
+  if (it.participants && it.participants.some(p => isVIP(p))) return true;
+  return false;
+}
+
+function computeScore(it) {
+  const base = TIER_BASE[it.tier] || 0;
+  // Recency: 0..99. Items from "now" get 99, ~48h old get ~3, older get 0.
+  // Slope of 2 pts/hour keeps tier buckets clearly separated — a 5h-old
+  // P0 (1000+89) still outranks a fresh P1 (500+99).
+  const ageH = Math.max(0, (Date.now() / 1000 - (it.last_ts || 0)) / 3600);
+  const recency = Math.max(0, 99 - ageH * 2);
+  // DONE / snoozed: sink below every tier so they can't bubble up by
+  // recency. User-overridden state (effectiveItem) — the original
+  // heuristic-derived status stays, but user overrides win.
+  const eff = effectiveItem(it);
+  const penalty = (eff.status === 'DONE' || eff.snoozed) ? -2000 : 0;
+  return base + recency + penalty;
 }
 
 // Escape a string so it can be embedded safely in a RegExp source.
@@ -1361,6 +1451,8 @@ function partitionByChannel(flatItems) {
         is_group_dm: isGroupDM(it.channel_name),
         last_ts: 0,
         last_time: '',
+        max_score: 0,
+        top_tier: 'P3',
         items: [],
       });
     }
@@ -1371,13 +1463,25 @@ function partitionByChannel(flatItems) {
       ch.last_ts = it.last_ts;
       ch.last_time = it.last_time;  // kept for display only
     }
+    // Track the highest-priority item in the channel so channel-level
+    // sort surfaces "this channel has something urgent" even if newer
+    // items in other channels are uneventful. P0 in a channel bumps the
+    // whole channel block above a recency-only sort would have placed it.
+    if ((it.score || 0) > (ch.max_score || 0)) {
+      ch.max_score = it.score;
+      ch.top_tier  = it.tier;
+    }
   }
   const all = Array.from(byKey.values());
-  const byRecency = (a, b) => (b.last_ts || 0) - (a.last_ts || 0);
+  // Channel sort: composite score desc, recency as tiebreaker. Same
+  // shape as item-level sort in normalize() — ensures consistency.
+  const byScore = (a, b) =>
+    (b.max_score || 0) - (a.max_score || 0) ||
+    (b.last_ts   || 0) - (a.last_ts   || 0);
 
-  const vip   = all.filter(c => c.is_vip).sort(byRecency);
-  const left  = all.filter(c => !c.is_vip && (c.kind === 'channel' || c.is_group_dm)).sort(byRecency);
-  const right = all.filter(c => !c.is_vip && c.kind === 'dm' && !c.is_group_dm).sort(byRecency);
+  const vip   = all.filter(c => c.is_vip).sort(byScore);
+  const left  = all.filter(c => !c.is_vip && (c.kind === 'channel' || c.is_group_dm)).sort(byScore);
+  const right = all.filter(c => !c.is_vip && c.kind === 'dm' && !c.is_group_dm).sort(byScore);
   return { vip, left, right, total: all.length };
 }
 
