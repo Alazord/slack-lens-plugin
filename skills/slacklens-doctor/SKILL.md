@@ -199,16 +199,41 @@ else:
     if not lines:
         print("⚠ refresh.log — empty. Run `refresh slacklens` once.")
     else:
-        ok = sum(1 for ln in lines if '"outcome":"ok"' in ln or '"outcome": "ok"' in ln)
-        fail = len(lines) - ok
-        last = lines[-1]
-        try:
-            entry = json.loads(last)
-            summary = entry.get("at", "?") + " (" + entry.get("mode", "?") + ", " + entry.get("outcome", "?") + ")"
-        except Exception:
-            summary = last[:80]
-        marker = "✓" if fail == 0 else "⚠"
-        tail = f" — {fail} failure(s) in last {len(lines)}" if fail else ""
+        entries = []
+        for ln in lines:
+            try:
+                entries.append(json.loads(ln))
+            except Exception:
+                entries.append({"outcome": "parse-error", "raw": ln[:80]})
+
+        # Outcome tallies — each entry has exactly one outcome value.
+        # Known values as of v0.7: ok, suspicious, err, parse-error.
+        ok_count         = sum(1 for e in entries if e.get("outcome") == "ok")
+        suspicious_count = sum(1 for e in entries if e.get("outcome") == "suspicious")
+        err_count        = sum(1 for e in entries if e.get("outcome") == "err")
+        other_count      = len(entries) - ok_count - suspicious_count - err_count
+
+        restored_count = sum(1 for e in entries if e.get("restored_from_backup"))
+        repaired_total = sum(int(e.get("results_repaired") or 0) for e in entries)
+
+        last = entries[-1]
+        summary = (last.get("at", "?") + " ("
+                   + last.get("mode", "?") + ", "
+                   + last.get("outcome", "?") + ")")
+
+        # Pick worst status among last 20: err > suspicious > backup-restore > ok
+        if err_count > 0 or other_count > 0:
+            marker, note = "✗", f"{err_count + other_count} error(s) in last {len(entries)} — run `refresh slacklens` and check output"
+        elif suspicious_count > 0:
+            marker, note = "⚠", f"{suspicious_count} suspicious refresh(es) — Slack returned 0 while cache had items; say `deep refresh slacklens` to confirm"
+        elif restored_count > 0:
+            marker, note = "⚠", f"{restored_count} refresh(es) fell back to cache.json.bak — a prior run likely crashed mid-write"
+        elif repaired_total > 0:
+            marker, note = "⚠", f"{repaired_total} malformed result field(s) auto-repaired across last {len(entries)} — upstream MCP may be flaky"
+        else:
+            marker, note = "✓", ""
+
+        tail = f" — {note}" if note else ""
         print(f"{marker} refresh.log — last: {summary}{tail}")
 PY
 ```
@@ -362,7 +387,7 @@ Suppress all prose and ✓/⚠/✗ lines. Emit one JSON object on stdout:
   "runtime":   {"slack_mcp": "ok", "scheduled_tasks": "ok", "cowork": "missing"},
   "plugin":    {"config": "ok", "dashboard": "ok", "allowlist_missing": 0},
   "cache":     {"version": 1, "age_hours": 2.3, "mentions": 4, "dms": 1, "channels": 0, "threads": 3},
-  "refresh_log": {"entries": 12, "failures": 0, "last_outcome": "ok"},
+  "refresh_log": {"entries": 12, "failures": 0, "suspicious": 0, "restored_from_backup": 0, "results_repaired": 0, "last_outcome": "ok"},
   "scheduled": {"registered": false, "cron": null},
   "next_step": "nothing to do — SlackLens is healthy."
 }
