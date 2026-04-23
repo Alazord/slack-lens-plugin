@@ -846,7 +846,48 @@ function checkSchemaBanner() {
   const hasNewKeys = ('mentions' in sr) && ('dms' in sr) && ('channels' in sr);
   if (hasOldKeys && !hasNewKeys) {
     showBanner('warn', 'Your cache predates v0.2.0 — run "refresh slacklens" to rebuild.');
+    return;
   }
+  // Soft upgrade prompt for v1 caches. Everything still works; the new
+  // fields just aren't pre-computed yet so tier scoring falls back to
+  // regex-deriving from_user_id + mentioned_ids on every render.
+  const ver = raw.version || 1;
+  if (ver < 2) {
+    showBanner('info', 'Run "refresh slacklens" to rebuild the cache with v0.9.0 fields (lighter render, better VIP detection).');
+  }
+}
+
+// --- v2 cache-compat helpers. --------------------------------------
+// Dashboards shipped with v0.9.0+ prefer the structured fields written
+// by slacklens-refresh (`from_user_id`, `mentioned_ids`, `reply_count`).
+// Pre-v2 caches don't have them — we derive on the fly, identical regex
+// to the one the refresh skill uses at write-time. Keep the two regexes
+// in sync: if the ID format Slack uses ever changes, both sides break
+// together and the fix is obvious. Leaving one side stale would look
+// like a VIP-detection bug with no trail to the actual cause.
+const ID_IN_NAME_RE      = /\(([UC][A-Z0-9]+)\)\s*$/;
+const MENTION_IN_TEXT_RE = /<@([UC][A-Z0-9]+)>/g;
+
+function deriveUserId(fromStr) {
+  if (!fromStr) return '';
+  const m = ID_IN_NAME_RE.exec(fromStr);
+  return m ? m[1] : '';
+}
+function deriveMentions(text) {
+  if (!text) return [];
+  const out = [];
+  MENTION_IN_TEXT_RE.lastIndex = 0;  // reset for /g flag reuse
+  let m;
+  while ((m = MENTION_IN_TEXT_RE.exec(text)) !== null) out.push(m[1]);
+  return out;
+}
+function msgUserId(msg)      { return (msg && msg.from_user_id)  || deriveUserId(msg && msg.from); }
+function msgMentions(msg)    { return (msg && msg.mentioned_ids) || deriveMentions(msg && msg.text); }
+function resultUserId(r)     { return (r && r.from_user_id)      || deriveUserId(r && r.from_user); }
+function resultMentions(r)   { return (r && r.mentioned_ids)     || deriveMentions(r && r.text); }
+function threadReplyCount(t) {
+  if (t && typeof t.reply_count === 'number') return t.reply_count;
+  return Math.max(0, ((t && t.messages) || []).length - 1);
 }
 
 // Parse the cache embedded in this file and render. The dashboard ships as
@@ -922,7 +963,14 @@ function normalize() {
       last_time: lastTime,
       last_ts: lastTs,
       msg_count: msgs.length,
+      reply_count: threadReplyCount(t),
       participants: Array.from(new Set(msgs.map(m => cleanName(m.from)))).filter(Boolean),
+      // Structured IDs for tier scoring — cheap to attach now so every
+      // downstream check (isMe / isVIP / was-I-tagged) reads an array,
+      // not a display string.
+      participant_ids: Array.from(new Set(msgs.map(msgUserId))).filter(Boolean),
+      last_from_id: last ? msgUserId(last) : '',
+      mentioned_ids_all: Array.from(new Set(msgs.flatMap(msgMentions))).filter(Boolean),
       status: derived.status,
       needs_reply: derived.needs_reply,
       source: 'thread',
@@ -950,6 +998,8 @@ function normalize() {
     if (threadPermalinks.has(m.permalink)) return;
     if (seen.has(m.permalink)) return; seen.add(m.permalink);
     const lastIsMe = isMe(m.from_user);
+    const senderId   = resultUserId(m);
+    const mentioned  = resultMentions(m);
     items.push({
       key: m.permalink,
       kind: kindFromChannel(m.channel_name, m.channel_id),
@@ -963,7 +1013,13 @@ function normalize() {
       last_time: m.time,
       last_ts: +m.message_ts || 0,
       msg_count: 1,
+      // reply_count unknown for standalone search results — no thread
+      // was fetched. null signals "unknown" vs "0 known replies".
+      reply_count: null,
       participants: [cleanName(m.from_user)].filter(Boolean),
+      participant_ids: senderId ? [senderId] : [],
+      last_from_id: senderId,
+      mentioned_ids_all: mentioned,
       // Outgoing DMs (dms bucket) have last_from == me; the thread
       // ball is in the other person's court. Incoming messages keep
       // the "AWAITING YOUR REPLY" default.

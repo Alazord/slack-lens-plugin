@@ -145,10 +145,11 @@ replies) because:
 - It's the simplest correct way to pick up edits and deletions inside
   an otherwise-cached thread.
 
-### Required cache shape (the dashboard reads this exactly)
+### Required cache shape (the dashboard reads this exactly — v2)
 
 ```json
 {
+  "version": 2,
   "refreshed_at": "<ISO timestamp>",
   "search_results": {
     "mentions": [
@@ -156,13 +157,15 @@ replies) because:
         "query":   "to:<@U01EXAMPLE99> after:2026-04-19",
         "results": [
           {
-            "channel_id":   "C01EXAMPLE00",
-            "channel_name": "Group DM (Alice Example, Jane Doe, Bob Example)",
-            "from_user":    "Alice Example (U01ALICE000)",
-            "message_ts":   "1776757696.480349",
-            "time":         "2026-04-21 13:18:16 IST",
-            "permalink":    "https://example.slack.com/archives/C.../p...",
-            "text":         "Hey, can you review this?"
+            "channel_id":    "C01EXAMPLE00",
+            "channel_name":  "Group DM (Alice Example, Jane Doe, Bob Example)",
+            "from_user":     "Alice Example (U01ALICE000)",
+            "from_user_id":  "U01ALICE000",
+            "message_ts":    "1776757696.480349",
+            "mentioned_ids": ["U01EXAMPLE99"],
+            "time":          "2026-04-21 13:18:16 IST",
+            "permalink":     "https://example.slack.com/archives/C.../p...",
+            "text":          "Hey <@U01EXAMPLE99>, can you review this?"
           }
         ]
       }
@@ -175,17 +178,28 @@ replies) because:
       "channel_id":   "C01EXAMPLE00",
       "channel_name": "Group DM (...)",
       "thread_ts":    "1776757696.480349",
+      "reply_count":  3,
       "messages": [
-        { "from": "Alice Example (U01ALICE000)",
-          "ts":   "1776757696.480349",
-          "time": "2026-04-21 13:18:16 IST",
-          "text": "Hey, can you review this?",
-          "permalink": "https://..." }
+        { "from":          "Alice Example (U01ALICE000)",
+          "from_user_id":  "U01ALICE000",
+          "ts":            "1776757696.480349",
+          "mentioned_ids": ["U01EXAMPLE99"],
+          "time":          "2026-04-21 13:18:16 IST",
+          "text":          "Hey <@U01EXAMPLE99>, can you review this?",
+          "permalink":     "https://..." }
       ]
     }
   }
 }
 ```
+
+Fields added in v2 (all populated by Step 2's enrichment block, not by
+Step 1 — so Step 1 still builds the Slack payload the same as before):
+
+- `from_user_id` — ID parsed out of `"Name (U0123)"` suffix. Empty
+  string if Slack didn't return the ID-in-name format.
+- `mentioned_ids` — list of IDs found in `<@U0123>` tokens inside `text`.
+- `reply_count` — on each thread: number of replies beneath the parent.
 
 **Hard rules:**
 
@@ -291,6 +305,45 @@ for key in ("mentions", "dms", "channels"):
                     results_repaired += 1
             cleaned.append(r)
         q["results"] = cleaned
+
+# --- Schema v2 enrichment ---
+# Derive structured fields from the string shapes Slack returns, so the
+# dashboard doesn't have to regex-parse them on every render. Zero new
+# API calls — pure re-shaping of what we already fetched.
+#
+#   from_user_id   — ID parsed out of "Alice Example (U01ALICE000)". Empty
+#                    string if absent. Needed for tier scoring (isMe/isVIP)
+#                    without relying on display-name common-name matches.
+#   mentioned_ids  — list of IDs found in <@U0123> tokens inside text.
+#                    Needed to detect "VIP tagged me" (P0) vs "VIP is
+#                    just present" (P1).
+#   reply_count    — derived per-thread as len(messages) - 1. Needed to
+#                    distinguish "busy thread, 30 replies" from "dead
+#                    message, no replies" on the render side.
+USER_ID_RE = re.compile(r"\(([UC][A-Z0-9]+)\)\s*$")
+MENTION_RE = re.compile(r"<@([UC][A-Z0-9]+)>")
+
+def _extract_user_id(from_str):
+    m = USER_ID_RE.search(from_str or "")
+    return m.group(1) if m else ""
+
+def _extract_mentions(text):
+    return MENTION_RE.findall(text or "")
+
+for key in ("mentions", "dms", "channels"):
+    for q in sr[key]:
+        for r in q.get("results") or []:
+            r["from_user_id"]  = _extract_user_id(r.get("from_user"))
+            r["mentioned_ids"] = _extract_mentions(r.get("text"))
+
+for _k, t in threads_new.items():
+    msgs = t.get("messages") or []
+    for msg in msgs:
+        msg["from_user_id"]  = _extract_user_id(msg.get("from"))
+        msg["mentioned_ids"] = _extract_mentions(msg.get("text"))
+    # Reply count = total messages - 1 (the parent). Floor at 0 in case
+    # of an empty thread (shouldn't happen but be defensive).
+    t["reply_count"] = max(0, len(msgs) - 1)
 
 # --- Decide final shape: merge-with-old (DELTA) or use-as-is (FULL) ---
 # Also: ALWAYS load prior cache metadata (even in FULL mode) so we can
@@ -457,8 +510,13 @@ if mode == "FULL" and new_total == 0 and prior is not None:
 # --- Assemble final data dict ---
 # version = cache schema version. Dashboard + doctor read this to detect
 # drift. Bump whenever we change bucket keys or per-result field names.
+#
+#   v1: mentions/dms/channels buckets + threads dict; string from_user.
+#   v2: adds from_user_id, mentioned_ids per result + per thread message,
+#       and reply_count per thread. Backward compatible — v1 fields still
+#       present; v2 readers use new fields if populated, else derive.
 data = {
-    "version": 1,
+    "version": 2,
     "refreshed_at": datetime.now().astimezone().isoformat(),
     "mode": mode,
     "search_results": sr,

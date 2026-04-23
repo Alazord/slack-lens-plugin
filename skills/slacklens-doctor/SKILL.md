@@ -137,7 +137,7 @@ python3 - <<'PY'
 import json, os
 from datetime import datetime, timezone
 
-SUPPORTED_CACHE_VERSION = 1
+SUPPORTED_CACHE_VERSION = 2
 
 home = os.path.expanduser("~/.slacklens")
 cache_path = os.path.join(home, "cache.json")
@@ -153,15 +153,18 @@ else:
         t = len(data.get("threads") or {})
         total = m + d + c + t
 
-        # Schema version — v0.5+ caches carry a version field. Missing
-        # field = pre-v0.5 cache; treat as v0 and warn soft.
+        # Schema version — v0.5+ caches carry a version field. v2 added
+        # structured from_user_id / mentioned_ids / reply_count in v0.9.0
+        # for tier scoring. Old v1 caches still render correctly; the
+        # dashboard derives v2 fields lazily. Prompt for refresh so the
+        # user gets the lighter render path and accurate VIP detection.
         ver = data.get("version")
         if ver is None:
-            print(f"⚠ cache schema — no version field (pre-v0.6). Safe but run `refresh slacklens` to upgrade.")
+            print(f"⚠ cache schema — no version field (pre-v0.6). Run `refresh slacklens` to upgrade to v{SUPPORTED_CACHE_VERSION}.")
         elif ver > SUPPORTED_CACHE_VERSION:
             print(f"✗ cache schema — v{ver} newer than dashboard supports (v{SUPPORTED_CACHE_VERSION}). Update the plugin.")
         elif ver < SUPPORTED_CACHE_VERSION:
-            print(f"⚠ cache schema — v{ver} older than current v{SUPPORTED_CACHE_VERSION}. Run `refresh slacklens`.")
+            print(f"⚠ cache schema — v{ver} older than current v{SUPPORTED_CACHE_VERSION}. Run `refresh slacklens` to pick up v2 fields (from_user_id, mentioned_ids, reply_count).")
         else:
             print(f"✓ cache schema — v{ver}")
 

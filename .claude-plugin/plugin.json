@@ -1,7 +1,7 @@
 {
   "name": "slacklens",
-  "version": "0.9.0",
-  "description": "Personal Slack triage dashboard. Fetch fidelity (pinned search limits, all three buckets rendered, permalink-based dedupe). Atomic cache writes with backup + suspicious-refresh guard. Tolerant per-result parsing. DELTA refresh. Stale-cache warnings. Versioned cache. Append-only refresh log with token-cost instrumentation. Seven skills including one-command uninstall.",
+  "version": "0.9.1",
+  "description": "Personal Slack triage dashboard. Cache schema v2: structured from_user_id, mentioned_ids, and reply_count enable precise VIP detection and tier-based priority scoring. Fetch fidelity (pinned search limits, all three buckets rendered, permalink-based dedupe). Atomic cache writes with backup + suspicious-refresh guard. Tolerant per-result parsing. DELTA refresh. Stale-cache warnings. Append-only refresh log with token-cost instrumentation. Seven skills including one-command uninstall.",
   "author": {
     "name": "Shailendra Singh"
   },
