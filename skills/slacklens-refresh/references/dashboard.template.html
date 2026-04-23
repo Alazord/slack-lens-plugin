@@ -1723,7 +1723,16 @@ function renderItem(it) {
       thread.className = 'sl-item-thread';
       const preview = others.slice(0, 2).join(', ');
       const extra = others.length > 2 ? ` +${others.length - 2}` : '';
-      thread.textContent = `${it.msg_count} msgs · ${preview}${extra}`;
+      // Badge order: replies → people → names. reply_count is the truest
+      // "busy thread" signal (excludes the parent), so lead with it when
+      // available. Falls back to msg_count on pre-v2 caches where
+      // reply_count is null (see threadReplyCount()).
+      const nReplies = (typeof it.reply_count === 'number') ? it.reply_count : null;
+      const countBadge = nReplies !== null
+        ? `${nReplies} ${nReplies === 1 ? 'reply' : 'replies'}`
+        : `${it.msg_count} msgs`;
+      const pplBadge = `${it.participants.length} ppl`;
+      thread.textContent = `${countBadge} · ${pplBadge} · ${preview}${extra}`;
       body.appendChild(thread);
     }
   }

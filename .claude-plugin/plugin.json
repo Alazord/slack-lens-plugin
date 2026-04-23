@@ -1,6 +1,6 @@
 {
   "name": "slacklens",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "Personal Slack triage dashboard for Claude Code. Four-tier priority scoring — a priority contact's direct message outranks a fresh casual ping. Cache schema v2 carries structured IDs + mentions + reply counts. Pinned search limits, permalink-based dedupe, and atomic cache writes with backup + suspicious-refresh guard. DELTA refresh. Stale-cache warnings. Token-cost instrumentation in the refresh log. Eight skills including one-command help and one-command uninstall.",
   "author": {
     "name": "Shailendra Singh"
