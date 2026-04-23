@@ -36,7 +36,10 @@ If setup's Step 0 fails with "MCP not connected", the Slack MCP isn't reachable 
 
 - **Open the dashboard** → say `open slacklens` in chat
 - **Force a refresh** → say `refresh slacklens` in chat
+- **Force a full 48h refresh** → say `deep refresh slacklens` (use when data looks stale or edits/deletes are missing)
 - **Health check** → say `check slacklens` (runs the doctor skill)
+- **Repair install after upgrade** → say `fix slacklens` (doctor re-injects the allowlist + re-copies the dashboard template; non-destructive)
+- **Structured doctor output** → say `check slacklens --json` (for scripting)
 - **Change priority people** → say `change slacklens vips` (or re-run `set up slacklens`)
 - **Turn auto-refresh on / off** → say `set up slacklens` again to turn it on, or `unschedule slacklens` to turn it off
 
@@ -55,7 +58,7 @@ Everything is a Claude Code skill — there's no local server, no port, no launc
 - `slacklens-unschedule` — removes the auto-refresh scheduled task
 - `slacklens-doctor` — health-checks every dependency and piece of state, prints ✓/⚠/✗ with a fix for each failure
 
-State lives in `~/.slacklens/`: `config.json`, `cache.json`, `dashboard.html`. Wipe that folder to factory-reset.
+State lives in `~/.slacklens/`: `config.json`, `cache.json`, `dashboard.html`, and `refresh.log` (last 20 refreshes, append-only — helps the doctor spot failures). Wipe that folder to factory-reset.
 
 ## What SlackLens has access to
 
@@ -125,6 +128,8 @@ The `version` field in `.claude-plugin/plugin.json` bumps on every release.
 | Teammate on Linux/WSL — `open slacklens` does nothing | The skill now tries `open` → `xdg-open` → `wslview` → `$BROWSER`. If none are found, install `xdg-utils` (Linux) or `wslu` (WSL). The dashboard still lives at `~/.slacklens/dashboard.html`. |
 | Auto-refresh isn't running every 8h | By design — auto-refresh is opt-in. Say `set up slacklens` again and answer **yes** when asked, or just `refresh slacklens` on demand. Run `check slacklens` to see the current schedule status. |
 | Something feels off and I don't know what | Run `check slacklens`. The doctor prints a ✓/⚠/✗ report of every dependency and a one-line fix for each failure. |
+| Just upgraded and things feel broken | Run `fix slacklens`. The doctor re-injects the allowlist + re-copies the dashboard template, then re-runs the report. Non-destructive — never touches your cache or VIPs. |
+| Dashboard freshness pill turned red | Cache is >24h old. Run `refresh slacklens` or set up auto-refresh via `set up slacklens`. |
 | Want to revoke what SlackLens was granted | Run `/permissions` in chat, or edit `~/.claude/settings.json` and remove SlackLens's entries (they start with `Bash(mkdir:*)` or `mcp__claude_ai_Slack__*`). |
 
 ---

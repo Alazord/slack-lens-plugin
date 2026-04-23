@@ -381,6 +381,16 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .sl-fresh[data-stale="1"] { color: var(--status-amber); }
+.sl-fresh[data-stale="2"] {
+  color: var(--status-red);
+  font-weight: 600;
+}
+.sl-fresh[data-stale="2"]::after {
+  content: "— refresh slacklens";
+  margin-left: 8px;
+  color: var(--ink-muted);
+  font-weight: 400;
+}
 
 .sl-iconbtn {
   width: 28px; height: 28px;
@@ -1099,8 +1109,12 @@ function render() {
   const shown = applyFilter(items);
   const parts = partitionByChannel(shown);
 
-  // Three empty-state paths
-  if (!raw || (!raw.search_results && !raw.threads)) {
+  // Four empty-state paths — the differentiation matters for UX, so keep
+  // each branch distinct. "Never refreshed" and "refreshed but silent"
+  // look identical at the raw-count level but feel very different to users.
+  const neverRefreshed = !raw || !raw.refreshed_at ||
+    (!raw.search_results && !raw.threads);
+  if (neverRefreshed) {
     empty.hidden = false;
     empty.innerHTML =
       '<h4>No cache loaded yet</h4>' +
@@ -1138,10 +1152,17 @@ function render() {
   }
 
   if (parts.total === 0) {
+    // Genuine quiet period — cache is fresh, Slack just returned nothing.
+    // Show when we last checked so the user can tell this apart from
+    // "maybe refresh is broken?".
     empty.hidden = false;
+    const t = Date.parse(raw.refreshed_at);
+    const ageHours = isFinite(t) ? (Date.now() - t) / 3600000 : null;
+    const ageStr = ageHours != null ? humanAge(ageHours) : 'recently';
     empty.innerHTML =
       '<h4>Nothing in the last 48 hours</h4>' +
-      '<p>Catch your breath.</p>';
+      `<p>Cache is fresh (refreshed ${ageStr}). Catch your breath — or say ` +
+      '<code>refresh slacklens</code> to check again.</p>';
     vipBand.hidden = true;
     return;
   }
@@ -1328,7 +1349,8 @@ function bootFilters() {
   const snz = document.getElementById('showSnoozed');
   if (snz) snz.addEventListener('change', () => { filter.showSnoozed = snz.checked; render(); });
 }
-const STALE_CACHE_HOURS = 12;
+const STALE_CACHE_HOURS = 12;      // amber: ">12h" — worth refreshing soon
+const VERY_STALE_CACHE_HOURS = 24; // red: ">24h" — data is a day old
 
 function updateFreshness() {
   const f = document.getElementById('freshness');
@@ -1355,7 +1377,10 @@ function updateFreshness() {
     : '';
   f.textContent = `${total} · ${datePrefix}${hhmm} · ${humanAge(ageHours)}`;
   f.title = `Cache refreshed at ${raw.refreshed_at}. Say "refresh slacklens" for a delta update, "deep refresh slacklens" to force a full 48h re-fetch.`;
-  f.dataset.stale = (ageHours > STALE_CACHE_HOURS) ? '1' : '0';
+  let staleLevel = '0';
+  if (ageHours > VERY_STALE_CACHE_HOURS)   staleLevel = '2';
+  else if (ageHours > STALE_CACHE_HOURS)   staleLevel = '1';
+  f.dataset.stale = staleLevel;
 }
 
 function humanAge(h) {

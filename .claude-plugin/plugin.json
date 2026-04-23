@@ -1,7 +1,7 @@
 {
   "name": "slacklens",
-  "version": "0.5.0",
-  "description": "Personal Slack triage dashboard. VIP band + channels / DMs columns, density + theme toggles, on-demand refresh, optional 8-hour auto-refresh, and a doctor skill to diagnose setup.",
+  "version": "0.6.0",
+  "description": "Personal Slack triage dashboard. VIP band + channels / DMs columns, density + theme toggles, on-demand delta refresh, optional auto-refresh, stale-cache warnings, versioned cache, append-only refresh log, and a doctor skill with --fix / --json modes.",
   "author": {
     "name": "Shailendra Singh"
   },

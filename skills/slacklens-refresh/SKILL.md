@@ -301,8 +301,12 @@ if len(threads_new) > 50:
     print("NOTE: capped threads at 50")
 
 # --- Assemble final data dict ---
+# version = cache schema version. Dashboard + doctor read this to detect
+# drift. Bump whenever we change bucket keys or per-result field names.
 data = {
+    "version": 1,
     "refreshed_at": datetime.now().astimezone().isoformat(),
+    "mode": mode,
     "search_results": sr,
     "threads": threads_new,
 }
@@ -378,6 +382,32 @@ print("mode=" + mode
       + ", mentions=" + str(m_count)
       + ", dms=" + str(d_count)
       + ", channels=" + str(c_count))
+
+# --- Refresh log (append-only, last 20 entries) ---
+# Powers `check slacklens` observability: failed refreshes would otherwise
+# vanish, and there would be no way to tell a 3-day-old cache from a
+# 3-day-old user. One line per refresh, newest-last, trimmed to 20.
+log_path = os.path.join(home, "refresh.log")
+entry = {
+    "at":        data["refreshed_at"],
+    "mode":      mode,
+    "outcome":   "ok",
+    "mentions":  m_count,
+    "dms":       d_count,
+    "channels":  c_count,
+    "threads":   len(threads_new),
+}
+try:
+    existing = []
+    if os.path.isfile(log_path):
+        with open(log_path, "r", encoding="utf-8") as f:
+            existing = [ln for ln in f.read().splitlines() if ln.strip()]
+    existing.append(json.dumps(entry, ensure_ascii=False))
+    existing = existing[-20:]
+    with open(log_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(existing) + "\n")
+except OSError:
+    pass
 
 try:
     os.remove(tmp)
