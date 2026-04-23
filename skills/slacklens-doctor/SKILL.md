@@ -216,6 +216,22 @@ else:
         restored_count = sum(1 for e in entries if e.get("restored_from_backup"))
         repaired_total = sum(int(e.get("results_repaired") or 0) for e in entries)
 
+        # Token-cost rollup (rough). payload_bytes // 4 is a BPE-lower-bound
+        # estimate, logged per refresh. Surface totals + last-24h window so
+        # user can see "how expensive is SlackLens per day".
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        cutoff_24h = now - timedelta(hours=24)
+        tokens_total = sum(int(e.get("tokens_est") or 0) for e in entries)
+        tokens_24h = 0
+        for e in entries:
+            try:
+                ts = datetime.fromisoformat((e.get("at") or "").replace("Z", "+00:00"))
+                if (ts.tzinfo and ts >= cutoff_24h) or (not ts.tzinfo and ts.replace(tzinfo=timezone.utc) >= cutoff_24h):
+                    tokens_24h += int(e.get("tokens_est") or 0)
+            except Exception:
+                continue
+
         last = entries[-1]
         summary = (last.get("at", "?") + " ("
                    + last.get("mode", "?") + ", "
@@ -235,6 +251,17 @@ else:
 
         tail = f" — {note}" if note else ""
         print(f"{marker} refresh.log — last: {summary}{tail}")
+
+        # Token cost line — always print if we have any data. Formatting:
+        # "~12.3k tokens total across 20 refreshes · ~3.1k in last 24h"
+        def _fmt(n):
+            if n >= 1000:
+                return f"{n/1000:.1f}k"
+            return str(n)
+        if tokens_total > 0:
+            print(f"ℹ refresh.log — payload cost: ~{_fmt(tokens_total)} tokens "
+                  f"across {len(entries)} refresh(es) · ~{_fmt(tokens_24h)} in last 24h "
+                  f"(rough, bytes/4 heuristic — doesn't count skill prompts or side-panel)")
 PY
 ```
 
@@ -387,7 +414,7 @@ Suppress all prose and ✓/⚠/✗ lines. Emit one JSON object on stdout:
   "runtime":   {"slack_mcp": "ok", "scheduled_tasks": "ok", "cowork": "missing"},
   "plugin":    {"config": "ok", "dashboard": "ok", "allowlist_missing": 0},
   "cache":     {"version": 1, "age_hours": 2.3, "mentions": 4, "dms": 1, "channels": 0, "threads": 3},
-  "refresh_log": {"entries": 12, "failures": 0, "suspicious": 0, "restored_from_backup": 0, "results_repaired": 0, "last_outcome": "ok"},
+  "refresh_log": {"entries": 12, "failures": 0, "suspicious": 0, "restored_from_backup": 0, "results_repaired": 0, "tokens_total": 12345, "tokens_24h": 3210, "last_outcome": "ok"},
   "scheduled": {"registered": false, "cron": null},
   "next_step": "nothing to do — SlackLens is healthy."
 }

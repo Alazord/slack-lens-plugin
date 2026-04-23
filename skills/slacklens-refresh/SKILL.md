@@ -219,6 +219,18 @@ tmp  = "/tmp/slacklens-refresh.json"
 with open(tmp, "r", encoding="utf-8") as f:
     delta = json.load(f)
 
+# Token-cost instrumentation — the /tmp payload is everything the Slack
+# MCP returned that the model had to consume into context. Size in bytes
+# divided by 4 is a rough lower-bound token estimate (BPE averages
+# ~3.5-4 chars/token for English). Feeds refresh.log so doctor can
+# answer "how expensive is SlackLens per day". Rough but consistent,
+# which is what we need for trend-spotting.
+try:
+    payload_bytes = os.path.getsize(tmp)
+except OSError:
+    payload_bytes = 0
+tokens_est = payload_bytes // 4
+
 mode = delta.pop("_mode", "FULL")
 restored_from_backup = bool(delta.pop("_restored_from_backup", False))
 
@@ -419,6 +431,8 @@ if mode == "FULL" and new_total == 0 and prior is not None:
             "new_total":      0,
             "prior_items":    prior_items,
             "prior_age_h":    round(prior_age_h, 2),
+            "payload_bytes":  payload_bytes,
+            "tokens_est":     tokens_est,
         })
         try:
             os.remove(tmp)
@@ -560,6 +574,8 @@ _log_entry({
     "threads":              len(threads_new),
     "results_repaired":     results_repaired,
     "restored_from_backup": restored_from_backup,
+    "payload_bytes":        payload_bytes,
+    "tokens_est":           tokens_est,
 })
 
 try:

@@ -42,6 +42,7 @@ If setup's Step 0 fails with "MCP not connected", the Slack MCP isn't reachable 
 - **Structured doctor output** → say `check slacklens --json` (for scripting)
 - **Change priority people** → say `change slacklens vips` (or re-run `set up slacklens`)
 - **Turn auto-refresh on / off** → say `set up slacklens` again to turn it on, or `unschedule slacklens` to turn it off
+- **Uninstall** → say `uninstall slacklens` (destructive — confirms first)
 
 The dashboard lives at `~/.slacklens/dashboard.html` and opens in your default browser. On Linux install `xdg-utils`; on WSL install `wslu`. If your Claude Code runtime exposes a side panel (Cowork does, via the `present_files` MCP tool), the dashboard is additionally presented there after every refresh.
 
@@ -49,7 +50,7 @@ The dashboard lives at `~/.slacklens/dashboard.html` and opens in your default b
 
 ## How it works
 
-Everything is a Claude Code skill — there's no local server, no port, no launchd job. The plugin ships six skills:
+Everything is a Claude Code skill — there's no local server, no port, no launchd job. The plugin ships seven skills:
 
 - `slacklens-setup` — one-time identity + VIP setup, and the opt-in prompt for auto-refresh
 - `slacklens-refresh` — pulls the last 48h of mentions/DMs from Slack via the Slack MCP, writes the cache, rebuilds the dashboard HTML (also re-copies the bundled template, so plugin updates propagate automatically)
@@ -57,6 +58,7 @@ Everything is a Claude Code skill — there's no local server, no port, no launc
 - `slacklens-vips` — add / remove / replace your priority people without re-running full setup
 - `slacklens-unschedule` — removes the auto-refresh scheduled task
 - `slacklens-doctor` — health-checks every dependency and piece of state, prints ✓/⚠/✗ with a fix for each failure
+- `slacklens-uninstall` — confirms, then removes scheduled task + strips allowlist + wipes `~/.slacklens/` (destructive, asks for `yes` first)
 
 State lives in `~/.slacklens/`: `config.json`, `cache.json`, `dashboard.html`, and `refresh.log` (last 20 refreshes, append-only — helps the doctor spot failures). Wipe that folder to factory-reset.
 
@@ -95,6 +97,21 @@ threads. It never sends messages on your behalf.
 chat and remove the entries, or edit `~/.claude/settings.json` directly.
 
 ## Uninstalling
+
+The easiest path is one command:
+
+```
+uninstall slacklens
+```
+
+That runs the `slacklens-uninstall` skill, which asks for an explicit
+`yes`, then removes the scheduled task, strips SlackLens's entries from
+`~/.claude/settings.json`, and wipes `~/.slacklens/`. Afterwards, run
+`/plugin uninstall slacklens@alazord` from chat to remove the plugin
+itself.
+
+If the plugin is already gone and you only want to clean up leftovers,
+do it manually:
 
 1. Unschedule auto-refresh (if it was registered): say `unschedule slacklens`.
 2. Remove the plugin: `/plugin uninstall slacklens@alazord`.

@@ -8,8 +8,8 @@
   "plugins": [
     {
       "name": "slacklens",
-      "description": "Personal Slack triage dashboard. Atomic cache writes with one-level backup, suspicious-refresh detection (keeps old cache when Slack returns 0 unexpectedly), tolerant per-result parsing, DELTA refresh, stale-cache warnings, versioned cache, append-only refresh log, doctor with --fix / --json modes.",
-      "version": "0.7.0",
+      "description": "Personal Slack triage dashboard. Atomic cache writes with one-level backup, suspicious-refresh detection, tolerant per-result parsing, DELTA refresh, stale-cache warnings, versioned cache, append-only refresh log with token-cost instrumentation, and seven skills including one-command uninstall.",
+      "version": "0.8.0",
       "source": "./",
       "author": {
         "name": "Shailendra Singh"
