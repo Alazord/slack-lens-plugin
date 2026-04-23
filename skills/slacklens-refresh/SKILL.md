@@ -103,13 +103,26 @@ above runs: `SLACKLENS_FORCE_FULL=1`.
 
 ## Step 1 — Fetch Slack data
 
-Run **three** Slack searches via `slack_search_public_and_private`:
+Run **three** Slack searches via `slack_search_public_and_private`.
+**Pin `limit: 50` on every call.** Without an explicit limit, the MCP
+picks its own default (typically 10-20), which silently drops results
+on busy days. 50 is a conservative upper bound — covers ~2x the volume
+a heavy user sees in 48 hours without risking rate-limit pressure on
+Slack Enterprise plans.
+
+Also pin `response_format: "concise"` and `include_context: false` on
+each call — these strip the verbose per-result HTML/attachment blobs
+Slack returns by default, keeping the payload inside token budget
+without losing the fields we actually cache (channel_id, channel_name,
+from_user, message_ts, text, time, permalink).
 
 | Bucket     | Query                                                                            | What it captures |
 |------------|----------------------------------------------------------------------------------|------------------|
 | `mentions` | `to:<@USER_ID> after:AFTER`                                                      | Messages addressed directly to the user |
 | `dms`      | `from:<@USER_ID> after:AFTER channel_types:im,mpim`                              | The user's outgoing DMs |
 | `channels` | `<@USER_ID> after:AFTER channel_types:public_channel,private_channel`            | @-mentions in channels |
+
+Each call: `query: <as above>, limit: 50, response_format: "concise", include_context: false`.
 
 ### Mode-specific post-processing
 

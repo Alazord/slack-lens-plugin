@@ -873,6 +873,18 @@ function normalize() {
   const seen = new Set();
   deriveWorkspaceOrigin();
 
+  // Build a set of every permalink already represented inside some thread.
+  // This replaces the old channel_id-only dedupe in the mentions loop,
+  // which silently dropped independent standalone mentions whenever ANY
+  // thread existed in the same channel — broken for 1:1 DMs with multiple
+  // separate threads from the same person.
+  const threadPermalinks = new Set();
+  Object.values(raw.threads || {}).forEach(t => {
+    (t.messages || []).forEach(msg => {
+      if (msg.permalink) threadPermalinks.add(msg.permalink);
+    });
+  });
+
   // 1) Threads (richer — have message history)
   const threads = raw.threads || {};
   Object.entries(threads).forEach(([threadKey, t]) => {
@@ -917,14 +929,27 @@ function normalize() {
     });
   });
 
-  // 2) Mentions (messages addressed to you) — add as items if not already covered by a thread
-  const mentionsQueries = (raw.search_results && raw.search_results.mentions) || [];
-  mentionsQueries.forEach(q => (q.results || []).forEach(m => {
+  // 2) Search buckets (mentions + channels + dms) — add as items if not
+  //    already covered by a thread.
+  //
+  //    Previously only the `mentions` bucket was rendered here. The
+  //    `channels` and `dms` buckets were used ONLY to seed thread
+  //    discovery in the refresh skill, so any unique result that
+  //    didn't resolve into a fetched thread was invisible on the
+  //    dashboard even though it sat in the cache. Iterating all three
+  //    here, with a permalink-based dedupe, fixes that silent-loss
+  //    class and gives outgoing-DMs / top-level channel pings a home.
+  const sr = raw.search_results || {};
+  const allQueries = [
+    ...(sr.mentions || []),
+    ...(sr.channels || []),
+    ...(sr.dms      || []),
+  ];
+  allQueries.forEach(q => (q.results || []).forEach(m => {
     if (!m.permalink) return;
-    // If we already have a thread whose key matches this channel, skip duplicating
-    const existing = items.find(it => it.channel_id === m.channel_id);
-    if (existing) return;
+    if (threadPermalinks.has(m.permalink)) return;
     if (seen.has(m.permalink)) return; seen.add(m.permalink);
+    const lastIsMe = isMe(m.from_user);
     items.push({
       key: m.permalink,
       kind: kindFromChannel(m.channel_name, m.channel_id),
@@ -933,15 +958,18 @@ function normalize() {
       channel_display: prettyChannel(m.channel_name, m.channel_id),
       permalink: m.permalink,
       last_from: cleanName(m.from_user),
-      last_is_me: isMe(m.from_user),
+      last_is_me: lastIsMe,
       last_text: m.text,
       last_time: m.time,
       last_ts: +m.message_ts || 0,
       msg_count: 1,
       participants: [cleanName(m.from_user)].filter(Boolean),
-      status: 'AWAITING YOUR REPLY',
-      needs_reply: !isMe(m.from_user),
-      source: 'mention',
+      // Outgoing DMs (dms bucket) have last_from == me; the thread
+      // ball is in the other person's court. Incoming messages keep
+      // the "AWAITING YOUR REPLY" default.
+      status: lastIsMe ? 'WAITING' : 'AWAITING YOUR REPLY',
+      needs_reply: !lastIsMe,
+      source: 'search',
     });
   }));
 
@@ -976,10 +1004,16 @@ function isVIP(s) {
   return VIP_NAMES.some(n => nameMatches(n, s));
 }
 function threadHasVIP(it) {
-  // Check last_from, participants, channel_display for any VIP
+  // VIP detection priority: who actually posted / is in the conversation.
   if (isVIP(it.last_from)) return true;
   if (it.participants && it.participants.some(p => isVIP(p))) return true;
-  if (isVIP(it.channel_display)) return true;
+  // Only match channel_display for DMs — that's where it literally reads
+  // "@VIPName" after prettyChannel(), so checking it flags DMs with VIPs
+  // even when the VIP hasn't posted yet. For regular channels like
+  // "#alice-project", matching channel names against VIP_NAMES was a bug:
+  // the whole channel got flagged VIP whenever "alice" was a VIP, even
+  // if alice wasn't in that specific thread.
+  if (it.kind === 'dm' && isVIP(it.channel_display)) return true;
   return false;
 }
 function cleanName(s) {
