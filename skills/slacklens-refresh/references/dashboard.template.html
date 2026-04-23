@@ -1158,6 +1158,28 @@ function normalize() {
       if (msgMentions(msg).includes(ME_ID)) { vipTaggedMe = true; break; }
     }
 
+    // stale_ping: I was tagged somewhere in this thread, but the
+    // conversation moved on without me — >=2 messages from other people
+    // arrived after my tag, and none of them were mine. That's the
+    // "panic opens Slack, oh someone else already handled it" case.
+    // When true we flip the inferred status to WAITING so it doesn't
+    // occupy mental space as an open ask, and score drops accordingly
+    // (WAITING doesn't get the needs_reply recency boost from overrides).
+    let stalePing = false;
+    const tagIdx = msgs.findIndex(msg => msgMentions(msg).includes(ME_ID));
+    if (tagIdx !== -1) {
+      let laterOther = 0;
+      for (let i = tagIdx + 1; i < msgs.length; i++) {
+        if (!isMe(msgs[i].from)) laterOther++;
+        if (isMe(msgs[i].from)) { laterOther = 0; break; }  // I responded → not stale
+      }
+      if (laterOther >= 2) stalePing = true;
+    }
+    if (stalePing) {
+      derived.status = 'WAITING';
+      derived.needs_reply = false;
+    }
+
     items.push({
       key,
       kind: kindFromChannel(t.channel_name, t.channel_id),
@@ -1180,6 +1202,7 @@ function normalize() {
       last_from_id: last ? msgUserId(last) : '',
       mentioned_ids_all: Array.from(new Set(msgs.flatMap(msgMentions))).filter(Boolean),
       vip_tagged_me: vipTaggedMe,
+      stale_ping: stalePing,
       status: derived.status,
       needs_reply: derived.needs_reply,
       source: 'thread',
@@ -1234,6 +1257,9 @@ function normalize() {
       last_from_id: senderId,
       mentioned_ids_all: mentioned,
       vip_tagged_me: vipTaggedMe,
+      // Single-message items can't be stale-pings (no later messages
+      // to move on without me); kept false for schema consistency.
+      stale_ping: false,
       // Outgoing DMs (dms bucket) have last_from == me; the thread
       // ball is in the other person's court. Incoming messages keep
       // the "AWAITING YOUR REPLY" default.
@@ -1438,16 +1464,55 @@ function deriveWorkspaceOrigin() {
   }
 }
 function inferStatus({channel_name, lastIsMe, lastText, msgs}) {
-  // Heuristics — user's overrides (if any) win at render time.
-  const text = (lastText || '').toLowerCase();
-  if (/resolved|fixed|merged|done|thanks, done/.test(text)) return {status:'DONE', needs_reply:false};
-  if (lastIsMe) {
-    // I spoke last — waiting on someone else
-    return {status:'WAITING', needs_reply:false};
+  // Heuristics — user's overrides (if any) win at render time. Three
+  // upgrades over the v0.1 regex-only version:
+  //   (a) word-bounded patterns: "check" no longer matches "checkout"
+  //       and "fixed" no longer matches "prefixed".
+  //   (b) cheap negation guard: "not resolved" / "no blocker" / "didn't
+  //       check" no longer trip the positive path.
+  //   (c) look-back when my last reply is a short ack: filler like "ok",
+  //       "thanks", "will do" shouldn't flip a thread to WAITING when
+  //       the previous non-me message still held the real ask. We fall
+  //       back to scoring the previous non-me message's text instead.
+  const DONE_RE   = /\b(resolved|fixed|merged|done|thanks,?\s*done|closed|closing|lgtm|ship(?:ped|ping)?)\b/i;
+  const URGENT_RE = /\b(eta|breach|urgent|blocker|asap|p0|p1|critical|high\s*priority)\b/i;
+  const ASK_RE    = /\b(check|verify|review|confirm|can\s+you|could\s+you|please|need\s+to|pr\s*#?\d+)\b/i;
+
+  function matchesPositive(re, text) {
+    if (!text) return false;
+    const m = re.exec(text);
+    if (!m) return false;
+    // Look at the 12 chars immediately before the match; if any common
+    // negator is within that window, treat the whole thing as a miss.
+    // Not linguistically rigorous, but handles the frequent false
+    // positives we saw in practice without a full NLU pass.
+    const ctx = text.slice(Math.max(0, m.index - 12), m.index).toLowerCase();
+    if (/\b(not|no|n't|never|without)\b/.test(ctx)) return false;
+    return true;
   }
-  // Someone else spoke last — I likely owe a reply
-  if (/eta|breach|urgent|please|need to|blocker/.test(text)) return {status:'BACKLOG', needs_reply:true};
-  if (/check|verify|review|confirm|pr\s*#?\d/.test(text)) return {status:'AWAITING YOUR REPLY', needs_reply:true};
+
+  const lastT = (lastText || '').toLowerCase();
+  if (matchesPositive(DONE_RE, lastT)) return {status:'DONE', needs_reply:false};
+
+  // Short-reply look-back: my last message might be a filler ack hiding
+  // someone else's unanswered ask. Threshold 15 chars catches "ok",
+  // "thanks", "will do", "looking", "sounds good" — not full answers.
+  let effectiveText = lastT;
+  let effectiveIsMe = lastIsMe;
+  if (lastIsMe && lastText && lastText.trim().length < 15 && msgs && msgs.length >= 2) {
+    const allButLast = msgs.slice(0, -1);
+    for (let i = allButLast.length - 1; i >= 0; i--) {
+      if (!isMe(allButLast[i].from)) {
+        effectiveText = (allButLast[i].text || '').toLowerCase();
+        effectiveIsMe = false;
+        break;
+      }
+    }
+  }
+
+  if (effectiveIsMe) return {status:'WAITING', needs_reply:false};
+  if (matchesPositive(URGENT_RE, effectiveText)) return {status:'BACKLOG', needs_reply:true};
+  if (matchesPositive(ASK_RE, effectiveText))    return {status:'AWAITING YOUR REPLY', needs_reply:true};
   return {status:'AWAITING YOUR REPLY', needs_reply:true};
 }
 

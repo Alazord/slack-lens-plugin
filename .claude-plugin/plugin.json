@@ -1,6 +1,6 @@
 {
   "name": "slacklens",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Personal Slack triage dashboard. Four-tier priority scoring (P0 VIP-addresses-you, P1 VIP-passively-present, P2 channel mentions, P3 DMs) — items sorted by score, not just recency. Cache schema v2 carries structured IDs + mentions + reply counts. Fetch fidelity: pinned search limits, all three buckets rendered, permalink-based dedupe. Atomic cache writes with backup + suspicious-refresh guard. DELTA refresh. Stale-cache warnings. Append-only refresh log with token-cost instrumentation. Seven skills including one-command uninstall.",
   "author": {
     "name": "Shailendra Singh"
