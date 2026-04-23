@@ -1,11 +1,15 @@
 ---
 name: slacklens-vips
-description: Update SlackLens's high-priority people (VIPs) — the folks whose DMs, mentions, and channels float to the top of the dashboard. Add, remove, or fully replace the list without re-running setup, without touching identity or the scheduled refresh. Use when the user says "change slacklens vips", "add slacklens priority", "update slacklens priorities", "remove slacklens vip", "edit high priority slacklens", "add a vip to slacklens", "stop prioritising <name> in slacklens".
+description: Update SlackLens's priority contacts — the people whose DMs, mentions, and channels float to the top of the dashboard. Add, remove, or fully replace the list without re-running setup, without touching identity or the scheduled refresh. Use when the user says "change slacklens vips", "change slacklens priority contacts", "add slacklens priority", "update slacklens priorities", "remove slacklens vip", "edit high priority slacklens", "add a priority contact to slacklens", "stop prioritising <name> in slacklens".
 ---
 
-You are updating the VIP / high-priority list for SlackLens. The
-rest of the plugin state (identity, scheduled task, cache) is not
-touched.
+You are updating the priority-contacts list for SlackLens. The rest
+of the plugin state (identity, scheduled task, cache) is not touched.
+
+Note on terminology: internally the code still calls this list
+`VIP_IDS` / `VIP_NAMES` (config key is `priority_people`). Talk to
+the user in "priority contacts" language — that's what the README,
+setup prompts, and dashboard use.
 
 ## Step 0 — Load current state
 
@@ -29,11 +33,11 @@ PY
 If the config is missing, stop and tell the user to run `set up
 slacklens` first.
 
-## Step 1 — Show current VIPs + ask the user what to change
+## Step 1 — Show current priority contacts + ask the user what to change
 
 Read the `CURRENT_*` values from Step 0 and tell the user:
 
-> Your current VIPs:
+> Your current priority contacts:
 > 1. <name> (<id>)
 > 2. <name> (<id>)
 >
@@ -46,8 +50,8 @@ Read the `CURRENT_*` values from Step 0 and tell the user:
 >  - **Cancel** (leave as-is)
 
 If the user's intent is already clear from their original message —
-e.g. they said "add Alice as a VIP" — skip asking and go straight to
-Step 2 with that instruction.
+e.g. they said "add Alice as a priority contact" — skip asking and
+go straight to Step 2 with that instruction.
 
 ## Step 2 — Resolve names to Slack IDs
 
@@ -72,7 +76,7 @@ Build the updated `priority_people` array in memory. Read the Step-0
 
 Print a one-line preview:
 
-> New VIP list: <name1>, <name2>, … (was: <old1>, <old2>, …).
+> New priority contacts: <name1>, <name2>, … (was: <old1>, <old2>, …).
 
 Ask: "Confirm? (yes / no)". If the user says no / cancel, stop and
 leave config untouched.
@@ -132,6 +136,6 @@ Step 3.
 
 One sentence:
 
-> Updated. SlackLens will now float `<N>` VIP(s) to the top of the
-> dashboard: `<name1>, <name2>, …`. Reload your browser tab (or say
-> `refresh slacklens`) to see the change.
+> Updated. SlackLens will now float `<N>` priority contact(s) to the
+> top of the dashboard: `<name1>, <name2>, …`. Reload your browser
+> tab (or say `refresh slacklens`) to see the change.

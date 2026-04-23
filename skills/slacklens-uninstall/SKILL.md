@@ -4,8 +4,9 @@ description: Completely de-integrate SlackLens — remove the scheduled task, st
 ---
 
 You are fully removing SlackLens's runtime state from the user's
-machine. This is destructive — wiping `~/.slacklens/` loses their VIP
-list, cached triage state, and refresh log. Always confirm first.
+machine. This is destructive — wiping `~/.slacklens/` loses their
+priority-contacts list, cached triage state, and refresh log. Always
+confirm first.
 
 ## Step 0 — Confirm
 
@@ -21,7 +22,7 @@ below so the user has a clear picture of the blast radius:
 >    and the `Bash(*:*)` entries scoped for SlackLens). Other plugins'
 >    entries are preserved.
 > 3. Delete `~/.slacklens/` entirely — config, cache, dashboard, refresh
->    log, and backup (`.bak`). Your VIP list and triage state are gone
+>    log, and backup (`.bak`). Your priority-contacts list and triage state are gone
 >    after this.
 >
 > The plugin itself stays installed — you can run `/plugin uninstall

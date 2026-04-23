@@ -142,7 +142,7 @@ the user IDs. Read the matches back briefly:
 
 If the user says "skip", "none", or "later", use an empty list and
 move on. They can re-run `set up slacklens` any time to add or change
-VIPs — all other state is preserved.
+priority contacts — all other state is preserved.
 
 ## Step 4 — Write config and dashboard
 

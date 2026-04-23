@@ -7,7 +7,7 @@ SlackLens asks for a tight, fixed set of permissions during setup. It is **read-
 | Tool | Purpose |
 |---|---|
 | `slack_read_user_profile` | Detect who you are at setup time. |
-| `slack_search_users` | Resolve VIP names to Slack IDs. |
+| `slack_search_users` | Resolve your priority-contact names to Slack IDs. |
 | `slack_search_public_and_private` | Find your mentions, DMs, and channel pings over the last 48 hours. |
 | `slack_read_thread` | Load the full thread of any conversation you appear in. |
 
@@ -16,7 +16,7 @@ No `send_message`, no `create_*`, no `update_*`. You can verify the exact tool s
 ## Local filesystem
 
 - Writes to `~/.slacklens/`:
-  - `config.json` — your identity + VIP list
+  - `config.json` — your identity + priority-contacts list
   - `cache.json` + `cache.json.bak` — fetched Slack data
   - `dashboard.html` + `dashboard.html.bak` — rendered dashboard
   - `refresh.log` — last 20 refresh events (mode, counts, token estimate)

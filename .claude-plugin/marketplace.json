@@ -8,8 +8,8 @@
   "plugins": [
     {
       "name": "slacklens",
-      "description": "Personal Slack triage dashboard. Four-tier priority scoring (P0 VIP-addresses-you, P1 VIP-passively-present, P2 channel mentions, P3 DMs) — items sorted by score, not just recency. Cache schema v2 carries structured IDs + mentions + reply counts. Fetch fidelity: pinned search limits, all three buckets rendered, permalink-based dedupe. Atomic cache writes with backup + suspicious-refresh guard. DELTA refresh. Stale-cache warnings. Append-only refresh log with token-cost instrumentation. Seven skills including one-command uninstall.",
-      "version": "0.10.1",
+      "description": "Personal Slack triage dashboard for Claude Code. Four-tier priority scoring — a priority contact's direct message outranks a fresh casual ping. Cache schema v2 carries structured IDs + mentions + reply counts. Pinned search limits, permalink-based dedupe, and atomic cache writes with backup + suspicious-refresh guard. DELTA refresh. Stale-cache warnings. Token-cost instrumentation in the refresh log. Eight skills including one-command help and one-command uninstall.",
+      "version": "0.11.0",
       "source": "./",
       "author": {
         "name": "Shailendra Singh"

@@ -29,7 +29,7 @@ Three outcomes to handle:
 ## Step 2 — (skipped — no more state to clean)
 
 Config, cache, dashboard, and allowlist entries all stay in place.
-The user's identity and VIP list are preserved. If the user wants to
+The user's identity and priority-contacts list are preserved. If the user wants to
 wipe everything, point them at the Uninstall section of the README.
 
 ## Step 3 — Confirm

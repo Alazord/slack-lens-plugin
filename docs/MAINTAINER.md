@@ -31,7 +31,7 @@ README.md              user-facing, stays short
 
 All under `~/.slacklens/`. See [PERMISSIONS.md](PERMISSIONS.md) for the user-facing explanation.
 
-- `config.json` — identity + VIP list; source of truth for scoring
+- `config.json` — identity + priority-contacts list; source of truth for scoring
 - `cache.json` + `.bak` — Slack data, written atomically with one-level backup
 - `dashboard.html` + `.bak` — self-contained renderable artifact
 - `refresh.log` — JSON-lines, last 20 entries, feeds `check slacklens`

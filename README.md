@@ -1,96 +1,110 @@
 # SlackLens
 
-A personal Slack triage dashboard for Claude Code. Surfaces your mentions, DMs, and active threads in one view, ranked by **who's asking** — not just when.
+A personal Slack triage dashboard for Claude Code. Pulls your mentions, DMs, and active threads into a single browser view, ranked by **who's asking** — not just when.
 
-## Why
+## What this is
 
-Scrolling Slack to find what actually needs you is exhausting. SlackLens pulls the last 48 hours of messages that touch you, scores each one by a four-tier priority model, and renders a single on-demand dashboard. Your boss's direct DM sits at the top; a channel ping from a stranger sits lower; items you've marked DONE sink regardless of freshness.
+- **Claude Code** is Anthropic's CLI for Claude — it runs in your terminal, in a desktop app, or as a VS Code / JetBrains extension. If you already use the Claude app or the Anthropic CLI, you have it.
+- **Plugins** extend Claude Code with new commands. You install them through a **marketplace** (a catalog the CLI downloads on demand).
+- **SlackLens** is one such plugin. It connects to whatever Slack integration (Slack MCP) you've already wired up, reads the last 48 hours of activity that touches you, scores each thread, and writes a self-contained dashboard file you open in your browser.
 
-It's read-only against Slack. State lives entirely on your machine.
+It's read-only against Slack. Nothing gets sent, posted, or reacted to. All state sits under `~/.slacklens/` on your machine.
+
+## Who this is for
+
+Anyone who drowns in Slack notifications and wants a single place to see "what actually needs me today". Works best if you have at least one or two **priority contacts** — people whose messages should rise to the top (manager, CEO, a key collaborator, whoever). Also works fine without any — you'll just get a recency-sorted "things mentioning you" list.
 
 ## Install
 
-Requires Claude Code with a [Slack MCP](https://docs.claude.com/claude-code/mcp) connected to your runtime.
-
-In any Claude Code chat:
+Open any Claude Code chat and run three commands in order:
 
 ```
 /plugin marketplace add Alazord/slack-lens-plugin
+```
+Downloads the SlackLens catalog entry. One-time per machine.
+
+```
 /plugin install slacklens@alazord
+```
+Installs the plugin. One-time per machine.
+
+```
 set up slacklens
 ```
+First-time setup — takes ~90 seconds. Detects who you are in Slack, asks who your priority contacts are, and asks if you want an auto-refresh every 8 hours (default: no). At the end, your browser opens to the dashboard.
 
-Setup takes ~90 seconds: it identifies you in Slack, asks who your VIPs are (manager, CEO, anyone whose message is more urgent than average), and asks whether to auto-refresh every 8 hours (default: **no**).
+Both `slacklens` and `slack lens` (with a space) work as triggers throughout.
 
-Both `slacklens` and `slack lens` work as triggers throughout.
+**Prerequisite:** you need a Slack integration connected to Claude Code. In the Claude desktop app: Settings → Connectors → Slack → Connect. For the CLI, see the [Claude Code MCP docs](https://docs.claude.com/claude-code/mcp). If setup complains "Slack MCP not connected", that connection is missing.
+
+**How do I know it worked?** The setup skill opens the dashboard automatically. If that didn't happen, run `check slacklens` — it prints a ✓/⚠/✗ report for every piece of state and a one-line fix per failure.
 
 ## Daily use
+
+Type any of these in a Claude Code chat. For the full list with one-line descriptions: say `slacklens help`.
 
 | Intent | Say |
 |---|---|
 | Open the dashboard | `open slacklens` |
 | Fresh data (incremental) | `refresh slacklens` |
 | Force a full 48h re-fetch | `deep refresh slacklens` |
+| Change your priority contacts | `change slacklens vips` |
 | Health check | `check slacklens` |
-| Repair after upgrade | `fix slacklens` |
-| Change VIPs | `change slacklens vips` |
-| Toggle auto-refresh off | `unschedule slacklens` |
-| Uninstall (confirms first) | `uninstall slacklens` |
+| Repair after a plugin upgrade | `fix slacklens` |
+| Turn auto-refresh off | `unschedule slacklens` |
+| Remove SlackLens completely | `uninstall slacklens` (asks for `yes` first) |
+| Command reference | `slacklens help` |
 
-The dashboard is a self-contained HTML file at `~/.slacklens/dashboard.html` — opens in your default browser. Runtimes with a side panel (e.g. Cowork) mirror it there automatically.
+The dashboard is a self-contained HTML file at `~/.slacklens/dashboard.html`. It opens in your default browser. Runtimes with a side panel (e.g. Cowork) mirror it there automatically.
 
-## Priority model
+## How items are ranked
 
-Items are scored by tier, recency, and user overrides. Tier always dominates recency.
+Items are scored by **tier + recency + your overrides**. Tier always dominates recency — a priority contact's 5-hour-old DM sits above a teammate's 30-second-old channel ping. Items you mark DONE or snooze sink below everything.
 
-| Tier | Rule | Example |
-|---|---|---|
-| **P0** | A VIP directly addresses you | Boss DMs you, or tags you in a channel |
-| **P1** | A VIP is in the conversation but didn't tag you | VIP was CC'd or posted earlier |
-| **P2** | You're mentioned somewhere, no VIP involved | Teammate pings you in a channel |
-| **P3** | You're in a 1:1 DM with a non-VIP | Casual check-in |
+Full tier table and edge-case rules: [docs/PRIORITY.md](docs/PRIORITY.md).
 
-Items marked DONE or snoozed drop below every tier. Channels with at least one urgent item bubble above quieter channels.
+You don't have to configure any priority contacts. SlackLens works as a plain "mentions + DMs in one view" tool out of the box. Priority contacts are opt-in depth, not a requirement.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| Setup says "Slack MCP not connected" | Connect Slack to your runtime, then retry `set up slacklens`. |
-| Dashboard blank or stale | `refresh slacklens`. If still blank: `rm -rf ~/.slacklens/` and re-run setup. |
-| Freshness pill turned red | Cache is >24h old. Run `refresh slacklens`. |
-| Something feels off after an upgrade | `fix slacklens` — re-injects the allowlist and re-copies the dashboard template. Non-destructive. |
-| You're unsure what's wrong | `check slacklens` — prints a full ✓/⚠/✗ report with a one-line fix per failure. |
-| Auto-refresh isn't running | By design — it's opt-in. Re-run `set up slacklens` and say **yes** when asked. |
+| "Slack MCP not connected" during setup | Connect Slack to your Claude Code runtime, then retry `set up slacklens`. |
+| Dashboard is blank or stale | `refresh slacklens`. If still blank: `rm -rf ~/.slacklens/` and re-run setup. |
+| Freshness pill in the header turned red | Cache is >24h old. `refresh slacklens`. |
+| Something feels off after an upgrade | `fix slacklens` — non-destructive, never touches your data. |
+| You're unsure what's broken | `check slacklens` — prints a full health report with a concrete next step. |
 
-On Linux, `open slacklens` needs `xdg-utils`; on WSL, `wslu`. The dashboard file still lives at `~/.slacklens/dashboard.html` regardless.
+On Linux, `open slacklens` needs `xdg-utils` installed; on WSL, `wslu`. The dashboard file always exists regardless of whether the opener works.
 
-## Privacy and permissions
+## Privacy
 
-SlackLens is read-only against Slack and never contacts any server other than your connected Slack MCP. Full permission inventory, state paths, and revocation steps are in [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
+SlackLens only reads Slack. It uses four read-only Slack tools (user profile, user search, message search, thread read) and never exposes any send/post/react tool to the model. No data leaves your machine except the Slack calls themselves. There's no telemetry, no remote server, no background daemon.
 
-One-command revocation:
+One-command full removal:
 
 ```
 uninstall slacklens
 ```
 
-Removes the scheduled task, strips SlackLens's entries from `~/.claude/settings.json`, and wipes `~/.slacklens/`. Asks for `yes` first.
+Removes the scheduled job, strips SlackLens's entries from `~/.claude/settings.json`, and wipes `~/.slacklens/`. Confirms before acting.
+
+Full permission inventory, filesystem paths, and revocation details: [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
 
 ## Updating
 
-Restart your Claude Code runtime, or run:
+Either restart your Claude Code runtime (marketplaces re-sync on launch), or run:
 
 ```
 /plugin marketplace update alazord
 ```
 
-The first `refresh slacklens` after an update picks up new UI automatically.
+The first `refresh slacklens` after an update picks up new UI automatically — the dashboard template is re-copied from the installed plugin on every refresh.
 
-## For contributors and maintainers
+## For maintainers
 
 - Release checklist: [docs/MAINTAINER.md](docs/MAINTAINER.md)
 - Smoke-test script: [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)
 - Permissions inventory: [docs/PERMISSIONS.md](docs/PERMISSIONS.md)
 
-Seven skills under `skills/`: `slacklens-setup`, `slacklens-refresh`, `slacklens-open`, `slacklens-vips`, `slacklens-unschedule`, `slacklens-doctor`, `slacklens-uninstall`. Each is a self-contained `SKILL.md` — everything runs in-process, no external server.
+Eight skills under `skills/`: `slacklens-setup`, `slacklens-refresh`, `slacklens-open`, `slacklens-vips`, `slacklens-unschedule`, `slacklens-doctor`, `slacklens-uninstall`, `slacklens-help`. Each is a self-contained `SKILL.md` — everything runs in-process, no external server.

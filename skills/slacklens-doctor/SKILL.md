@@ -1,6 +1,6 @@
 ---
 name: slacklens-doctor
-description: Health-check SlackLens end-to-end. Probes every runtime dependency (Slack MCP, scheduled-tasks MCP, Cowork MCP), checks that the plugin's own files are present and the cache is fresh, reads the refresh log for recent failures, and prints a check/cross report with a one-line fix for each failure. Supports a `--fix` mode that re-runs idempotent repairs (allowlist injection, dashboard template re-copy, identity+VIP re-injection) and a `--json` mode that emits a single structured JSON object instead of the pretty report. Use when the user says "check slacklens", "slacklens doctor", "slacklens health", "is slacklens working", "slacklens status", "debug slacklens", "slacklens troubleshoot", "fix slacklens", or asks for "slacklens json" / "slacklens --json".
+description: Health-check SlackLens end-to-end. Probes every runtime dependency (Slack MCP, scheduled-tasks MCP, Cowork MCP), checks that the plugin's own files are present and the cache is fresh, reads the refresh log for recent failures, and prints a check/cross report with a one-line fix for each failure. Supports a `--fix` mode that re-runs idempotent repairs (allowlist injection, dashboard template re-copy, identity + priority-contacts re-injection) and a `--json` mode that emits a single structured JSON object instead of the pretty report. Use when the user says "check slacklens", "slacklens doctor", "slacklens health", "is slacklens working", "slacklens status", "debug slacklens", "slacklens troubleshoot", "fix slacklens", or asks for "slacklens json" / "slacklens --json".
 ---
 
 You are running SlackLens's health check. Produce a concise report —
@@ -66,7 +66,7 @@ if os.path.isfile(cfg_path):
         user = cfg.get("user", {})
         vips = cfg.get("priority_people", [])
         if user.get("slack_id") and user.get("name"):
-            checks.append(("OK", f"config.json — {user['name']} ({user['slack_id']}), {len(vips)} VIP(s)"))
+            checks.append(("OK", f"config.json — {user['name']} ({user['slack_id']}), {len(vips)} priority contact(s)"))
         else:
             checks.append(("FAIL", "config.json present but user identity missing — re-run `set up slacklens`"))
     except Exception as e:
@@ -164,7 +164,7 @@ else:
         elif ver > SUPPORTED_CACHE_VERSION:
             print(f"✗ cache schema — v{ver} newer than dashboard supports (v{SUPPORTED_CACHE_VERSION}). Update the plugin.")
         elif ver < SUPPORTED_CACHE_VERSION:
-            print(f"⚠ cache schema — v{ver} older than current v{SUPPORTED_CACHE_VERSION}. Run `refresh slacklens` to pick up v2 fields (from_user_id, mentioned_ids, reply_count).")
+            print(f"⚠ cache schema — v{ver} older than current v{SUPPORTED_CACHE_VERSION}. Run `refresh slacklens` to pick up v2 fields (structured IDs, mentions, reply counts).")
         else:
             print(f"✓ cache schema — v{ver}")
 
@@ -364,7 +364,7 @@ else:
         h = sub(r"const VIP_NAMES\s*=\s*\[[^\]]*\]",
                 lambda _m: "const VIP_NAMES = " + json.dumps(vip_names), h, "VIP_NAMES")
         open(dst, "w", encoding="utf-8").write(h)
-        fixed.append(f"template: re-copied + re-injected identity + {len(vip_ids)} VIP(s)")
+        fixed.append(f"template: re-copied + re-injected identity + {len(vip_ids)} priority contact(s)")
 
 # The next `refresh slacklens` will re-inject the cache blob, so we
 # don't need to touch cache.json here. Fix mode is intentionally
