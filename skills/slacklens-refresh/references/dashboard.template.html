@@ -1362,6 +1362,26 @@ function cleanName(s) {
   if (!s) return '';
   return s.replace(/\s*\([UC][0-9A-Z]+\)\s*$/,'').trim();
 }
+
+// Slack serializes mentions and links as <@UID|name>, <#CID|name>,
+// <url|label>, <!here> etc. Users see the raw tokens in the dashboard
+// otherwise — rewrite to the human-readable form for display only.
+// Search still runs against the raw text so tokenized names remain findable.
+function formatSlackText(s) {
+  if (!s) return '';
+  return s
+    .replace(/<@([A-Z0-9]+)\|([^>]+)>/g, (_, _id, name) => '@' + name)
+    .replace(/<@([A-Z0-9]+)>/g,            (_, id)       => '@' + id)
+    .replace(/<#([A-Z0-9]+)\|([^>]+)>/g, (_, _id, name) => '#' + name)
+    .replace(/<#([A-Z0-9]+)>/g,            (_, id)       => '#' + id)
+    .replace(/<(https?:\/\/[^|>]+)\|([^>]+)>/g, (_, _u, label) => label)
+    .replace(/<(https?:\/\/[^>]+)>/g,           (_, url)        => url)
+    .replace(/<!(here|channel|everyone)(?:\|[^>]*)?>/g, (_, w) => '@' + w)
+    .replace(/<!subteam\^[A-Z0-9]+(?:\|([^>]+))?>/g, (_, name) => name ? '@' + name : '@group')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
 function kindFromChannel(name, id) {
   const n = (name||'').toLowerCase();
   if (n.startsWith('dm (') || (id||'').startsWith('D')) return 'dm';
@@ -1628,7 +1648,7 @@ function renderItem(it) {
 
   const msg = document.createElement('div');
   msg.className = 'sl-item-msg';
-  msg.textContent = it.last_text || '';
+  msg.textContent = formatSlackText(it.last_text);
   body.appendChild(msg);
 
   if (it.msg_count > 1 && it.participants && it.participants.length > 1) {
@@ -2021,7 +2041,7 @@ function openPanel(itemKey, triggerEl) {
     head.appendChild(fromEl); head.appendChild(timeEl);
     const body = document.createElement('div');
     body.className = 'msg-body';
-    body.textContent = m.text || '';
+    body.textContent = formatSlackText(m.text);
     wrap.appendChild(head); wrap.appendChild(body);
     threadEl.appendChild(wrap);
   }
