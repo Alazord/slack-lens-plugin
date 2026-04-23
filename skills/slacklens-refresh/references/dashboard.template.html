@@ -45,28 +45,55 @@
   --status-gray: #d6d0bd;
   --status-green: #5a7f5a;
 
-  /* Column tints — subtle accents for the Channels vs DMs split.
-     Accent = visible left-border; bg = ~5% alpha wash behind the card. */
-  --chan-accent: #5a7f8a;   /* cool teal-slate — channel threads */
-  --chan-bg:     #f3f1e8;   /* slightly cooler than surface */
-  --dm-accent:   #a87b5a;   /* warm sienna — 1:1 DMs */
-  --dm-bg:       #f8f3e7;   /* slightly warmer than surface */
-  --vip-band-bg: #f9eeea;   /* faint warm-red wash behind VIP band */
+  /* Column tints — accents for the Channels vs DMs split.
+     Accent = visible left-border; bg = tinted wash behind each card. */
+  --chan-accent: #3e6f7d;   /* cool teal-slate — channel threads */
+  --chan-col-bg: #eef1ee;   /* cooler column backdrop */
+  --chan-bg:     #ffffff;   /* crisp card against column backdrop */
+  --dm-accent:   #9a6a48;   /* warm sienna — 1:1 DMs */
+  --dm-col-bg:   #f2ebde;   /* warmer column backdrop */
+  --dm-bg:       #ffffff;   /* crisp card against column backdrop */
+  --vip-band-bg: #f5e6e1;   /* warm-red wash behind VIP band */
+  --card-shadow: 0 1px 2px rgba(42, 40, 34, 0.05), 0 0 0 1px rgba(42, 40, 34, 0.03);
 
   /* Misc */
   --stale-cache-hours: 12;  /* freshness meta turns amber past this */
   --transition-theme: 150ms ease;
+
+  /* Composition tokens — card/column/topbar/pill padding. Balanced defaults. */
+  --card-pad-y: 10px;   --card-pad-x: 14px;
+  --col-pad: 14px;
+  --topbar-py: 8px;     --topbar-px: 14px;
+  --pill-py: 4px;       --pill-px: 10px;
+  --vip-pad-y: 10px;    --vip-pad-x: 14px;
+  --section-gap: 22px;  /* vertical rhythm between VIP band and column grid */
+  --action-fs: 13px;    /* row action icon size */
+  --action-pad: 3px;
 }
 
 :root[data-density="compact"] {
-  --fs-xs: 10px;  --fs-sm: 11px;  --fs-base: 12px;  --fs-md: 13px;  --fs-lg: 15px;
-  --item-py: 4px;  --item-gap: 2px;  --channel-mb: 12px;
-  --col-gap: 16px;  --frame-pad: 20px;  --chanhead-py: 4px;
+  --fs-xs: 10px;  --fs-sm: 11px;  --fs-base: 12px;  --fs-md: 13px;  --fs-lg: 14px;
+  --item-py: 3px;  --item-gap: 2px;  --channel-mb: 10px;
+  --col-gap: 18px;  --frame-pad: 16px;  --chanhead-py: 4px;
+  --card-pad-y: 6px;  --card-pad-x: 10px;
+  --col-pad: 10px;
+  --topbar-py: 5px;   --topbar-px: 10px;
+  --pill-py: 3px;     --pill-px: 8px;
+  --vip-pad-y: 8px;   --vip-pad-x: 12px;
+  --section-gap: 18px;
+  --action-fs: 11px;  --action-pad: 2px;
 }
 :root[data-density="spacious"] {
-  --fs-xs: 12px;  --fs-sm: 13px;  --fs-base: 14px;  --fs-md: 15px;  --fs-lg: 17px;
+  --fs-xs: 12px;  --fs-sm: 13px;  --fs-base: 14px;  --fs-md: 15px;  --fs-lg: 18px;
   --item-py: 10px;  --item-gap: 6px;  --channel-mb: 24px;
-  --col-gap: 24px;  --frame-pad: 32px;  --chanhead-py: 8px;
+  --col-gap: 28px;  --frame-pad: 32px;  --chanhead-py: 8px;
+  --card-pad-y: 14px;  --card-pad-x: 18px;
+  --col-pad: 20px;
+  --topbar-py: 12px;   --topbar-px: 18px;
+  --pill-py: 6px;      --pill-px: 14px;
+  --vip-pad-y: 14px;   --vip-pad-x: 18px;
+  --section-gap: 28px;
+  --action-fs: 15px;   --action-pad: 4px;
 }
 
 :root[data-theme="dark"] {
@@ -82,11 +109,14 @@
   --status-amber: #d4a33a;
   --status-gray: #4a4539;
   --status-green: #7ea97e;
-  --chan-accent: #6a9aa5;
-  --chan-bg:     #1e1f1d;
-  --dm-accent:   #c79a74;
-  --dm-bg:       #221e19;
-  --vip-band-bg: #2a201d;
+  --chan-accent: #7ab1bf;
+  --chan-col-bg: #1c1f1e;
+  --chan-bg:     #262320;
+  --dm-accent:   #d9a877;
+  --dm-col-bg:   #231e18;
+  --dm-bg:       #2a2520;
+  --vip-band-bg: #2f211d;
+  --card-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.03);
 }
 
 /* Follow OS default when no explicit theme is set */
@@ -96,9 +126,10 @@
     --ink: #ede8d6; --ink-muted: #b0a991; --ink-faint: #8a8270;
     --vip-red: #e87b68; --status-red: #e87b68; --status-amber: #d4a33a;
     --status-gray: #4a4539; --status-green: #7ea97e;
-    --chan-accent: #6a9aa5; --chan-bg: #1e1f1d;
-    --dm-accent: #c79a74;   --dm-bg: #221e19;
-    --vip-band-bg: #2a201d;
+    --chan-accent: #7ab1bf; --chan-col-bg: #1c1f1e; --chan-bg: #262320;
+    --dm-accent: #d9a877;   --dm-col-bg: #231e18;   --dm-bg: #2a2520;
+    --vip-band-bg: #2f211d;
+    --card-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.03);
   }
 }
 
@@ -137,8 +168,8 @@ body {
   border: 1px solid var(--border);
   border-left: 3px solid var(--vip-red);
   border-radius: 6px;
-  padding: 10px 14px 12px;
-  margin-bottom: 20px;
+  padding: var(--vip-pad-y) var(--vip-pad-x) calc(var(--vip-pad-y) + 2px);
+  margin-bottom: var(--section-gap);
 }
 .sl-vip-band::before {
   content: "★ HIGH PRIORITY";
@@ -165,41 +196,59 @@ body {
 }
 @media (min-width: 1024px) {
   .sl-grid-2col {
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-columns: minmax(0, 11fr) minmax(0, 9fr);
   }
 }
-.sl-col { min-width: 0; }
+.sl-col { min-width: 0; padding: var(--col-pad); border-radius: 8px; }
+.sl-col--channels { background: var(--chan-col-bg); }
+.sl-col--dms      { background: var(--dm-col-bg); }
 .sl-col::before {
   display: block;
   font-family: var(--font-sans);
   font-size: var(--fs-xs);
   font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--ink-faint);
-  margin-bottom: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border-faint);
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
 }
 .sl-col--channels::before { content: "# CHANNELS"; color: var(--chan-accent); }
 .sl-col--dms::before      { content: "@ DIRECT MESSAGES"; color: var(--dm-accent); }
 .sl-col:empty { display: none; }
 
+/* Masonry within columns at wide viewports: cards pack horizontally
+   instead of leaving a tall empty vertical strip beside a denser column. */
+@media (min-width: 1280px) {
+  .sl-col--channels { column-count: 2; column-gap: var(--col-gap); }
+  .sl-col--channels > .sl-channel { break-inside: avoid; display: block; }
+  .sl-col::before { column-span: all; }
+}
+@media (min-width: 1600px) {
+  .sl-col--dms { column-count: 2; column-gap: var(--col-gap); }
+  .sl-col--dms > .sl-channel { break-inside: avoid; display: block; }
+}
+
 /* Per-column channel card tint */
 .sl-col--channels .sl-channel {
-  border-left: 2px solid var(--chan-accent);
+  border-left: 3px solid var(--chan-accent);
   background: var(--chan-bg);
-  padding: 8px 12px;
-  border-radius: 4px;
+  padding: var(--card-pad-y) var(--card-pad-x);
+  border-radius: 5px;
+  box-shadow: var(--card-shadow);
 }
 .sl-col--dms .sl-channel {
-  border-left: 2px solid var(--dm-accent);
+  border-left: 3px solid var(--dm-accent);
   background: var(--dm-bg);
-  padding: 8px 12px;
-  border-radius: 4px;
+  padding: var(--card-pad-y) var(--card-pad-x);
+  border-radius: 5px;
+  box-shadow: var(--card-shadow);
 }
 .sl-vip-band .sl-channel {
-  background: transparent;
-  padding: 6px 8px;
+  background: var(--surface);
+  border-left: 3px solid var(--vip-red);
+  padding: var(--card-pad-y) var(--card-pad-x);
+  border-radius: 5px;
+  box-shadow: var(--card-shadow);
 }
 
 .sl-footer {
@@ -214,7 +263,26 @@ body {
 /* ========================================================================
    Channel header
    ======================================================================== */
-.sl-channel { margin-bottom: var(--channel-mb); }
+.sl-channel {
+  margin-bottom: var(--channel-mb);
+  /* Each card is its own container — lets item rows reshape based on the
+     card's actual rendered width (not viewport). Solves the masonry case
+     where cards can narrow to ~300px and chip/actions crowd out the name. */
+  container-type: inline-size;
+  container-name: channel;
+}
+
+/* Responsive action/meta shedding based on card width */
+@container channel (max-width: 400px) {
+  /* Status chip eats too much horizontal room at this width; the 2px
+     left bar color still encodes the same info. */
+  .sl-item-status { display: none; }
+}
+@container channel (max-width: 320px) {
+  /* Collapse secondary primary-actions into the ⋯ menu; keep Slack jump. */
+  .sl-item-go[data-action="replied"],
+  .sl-item-go[data-action="snooze"] { display: none; }
+}
 .sl-channel-head {
   display: flex; justify-content: space-between; align-items: baseline;
   padding: var(--chanhead-py) 0;
@@ -223,15 +291,17 @@ body {
 }
 .sl-channel-name {
   font-family: var(--font-sans);
-  font-weight: 600;
+  font-weight: 700;
   font-size: var(--fs-md);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.005em;
   color: var(--ink);
   max-width: calc(100% - 100px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.sl-col--channels .sl-channel-head { border-bottom-color: color-mix(in srgb, var(--chan-accent) 20%, var(--border-faint)); }
+.sl-col--dms .sl-channel-head      { border-bottom-color: color-mix(in srgb, var(--dm-accent) 20%, var(--border-faint)); }
 .sl-channel-meta {
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
@@ -247,8 +317,10 @@ body {
   position: relative;
   display: grid;
   /* minmax(0, 1fr) lets the body column shrink below its content width;
-     otherwise long messages blow out the row and ignore text-overflow. */
-  grid-template-columns: 2px minmax(0, 1fr);
+     otherwise long messages blow out the row and ignore text-overflow.
+     Third column = action tail (Slack jump + snooze always visible,
+     hover-reveal cluster appears to their left). */
+  grid-template-columns: 2px minmax(0, 1fr) auto;
   gap: 10px;
   padding: var(--item-py) 6px var(--item-py) 0;
   border-bottom: 1px solid var(--border-faint);
@@ -257,6 +329,7 @@ body {
 }
 .sl-item-body { min-width: 0; }
 .sl-item-head { min-width: 0; gap: 8px; }
+.sl-item-head-right { display: inline-flex; align-items: baseline; gap: 8px; flex-shrink: 0; }
 .sl-item-from { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sl-item:last-child { border-bottom: 0; }
 .sl-item:hover { background: var(--surface-2); }
@@ -287,6 +360,40 @@ body {
   font-size: var(--fs-sm);
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
+}
+/* Status chip — muted, small-caps feel. Tuned for baseline alignment
+   next to sans "from" text and mono "time" without dominating the row. */
+.sl-item-status {
+  font-family: var(--font-sans);
+  font-size: calc(var(--fs-xs) - 1px);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0 5px;
+  border-radius: 2px;
+  white-space: nowrap;
+  color: var(--ink-faint);
+  background: transparent;
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+.sl-item[data-status="AWAITING YOUR REPLY"] .sl-item-status {
+  color: var(--status-red);
+  background: color-mix(in srgb, var(--status-red) 10%, transparent);
+}
+.sl-item[data-status="IN PROGRESS"] .sl-item-status,
+.sl-item[data-status="DISCUSSION"]  .sl-item-status {
+  color: var(--status-amber);
+  background: color-mix(in srgb, var(--status-amber) 10%, transparent);
+}
+.sl-item[data-status="WAITING"] .sl-item-status,
+.sl-item[data-status="BACKLOG"] .sl-item-status {
+  color: var(--ink-faint);
+  background: var(--surface-2);
+}
+.sl-item[data-status="DONE"] .sl-item-status {
+  color: var(--status-green);
+  background: color-mix(in srgb, var(--status-green) 10%, transparent);
 }
 .sl-item-msg {
   font-family: var(--font-serif);
@@ -362,23 +469,34 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 4px 0 12px;
-  border-bottom: 1px solid var(--border-faint);
-  margin-bottom: 12px;
+  padding: var(--topbar-py) var(--topbar-px);
+  margin-bottom: 14px;
+  gap: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-faint);
+  border-radius: 10px;
+}
+.sl-topbar-left {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
 }
 .sl-brand {
   font-family: var(--font-sans);
-  font-weight: 600;
+  font-weight: 700;
   font-size: var(--fs-lg);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   color: var(--ink);
 }
-.sl-topbar-right { display: flex; gap: 14px; align-items: center; }
+.sl-topbar-right { display: flex; gap: 8px; align-items: center; }
 .sl-fresh {
   font-family: var(--font-mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
 }
 .sl-fresh[data-stale="1"] { color: var(--status-amber); }
 .sl-fresh[data-stale="2"] {
@@ -406,28 +524,44 @@ body {
 .sl-iconbtn:hover { color: var(--ink); }
 
 /* ========================================================================
-   Toolbar
+   Toolbar — segmented, card-backed for visual cohesion with topbar
    ======================================================================== */
 .sl-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding-bottom: 4px;
+  gap: 10px;
+  padding: var(--topbar-py) var(--topbar-px);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  background: var(--surface-2);
+  border: 1px solid var(--border-faint);
+  border-radius: 10px;
+}
+/* Segmented group — wraps a set of pills in one tight rounded container */
+.sl-pills {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border-faint);
+  border-radius: 999px;
   flex-wrap: wrap;
 }
-.sl-pills { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-.sl-divider { width: 1px; height: 20px; background: var(--border); }
+/* Dividers replaced by segmented groups; keep element but hide */
+.sl-divider { display: none; }
 .sl-pill {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 10px;
+  padding: var(--pill-py) var(--pill-px);
   border-radius: 999px;
   font-family: var(--font-sans);
   font-size: var(--fs-sm);
-  background: var(--surface-2);
-  border: 1px solid var(--border-faint);
+  background: transparent;
+  border: 0;
   color: var(--ink-muted);
   cursor: pointer;
+  transition: background 120ms, color 120ms;
 }
+.sl-pill:hover { color: var(--ink); }
 .sl-pill .count {
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
@@ -435,18 +569,39 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .sl-pill.active {
-  background: var(--ink);
-  color: var(--surface);
-  border-color: var(--ink);
+  background: var(--surface-2);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(42, 40, 34, 0.08), 0 0 0 1px var(--border);
+  font-weight: 600;
 }
-.sl-pill.active .count { color: var(--surface); opacity: 0.7; }
+.sl-pill.active .count { color: var(--ink-muted); }
+
+/* Color-coded leading dot per filter — signals which content tint a pill targets */
+.sl-pill::before {
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+.sl-pill[data-scope="all"]::before         { background: var(--ink-faint); }
+.sl-pill[data-scope="needs_reply"]::before { background: var(--status-red); }
+.sl-pill[data-scope="mentions"]::before    { background: var(--vip-red); }
+.sl-pill[data-scope="dms"]::before         { background: var(--dm-accent); }
+.sl-pill[data-scope="channels"]::before    { background: var(--chan-accent); }
+.sl-pill[data-status="BACKLOG"]::before     { background: var(--status-gray); }
+.sl-pill[data-status="IN PROGRESS"]::before { background: var(--status-amber); }
+.sl-pill[data-status="WAITING"]::before     { background: var(--status-gray); }
+.sl-pill[data-status="DONE"]::before        { background: var(--status-green); }
+.sl-pill.active::before { opacity: 1; }
 
 .sl-search {
-  flex: 1 1 220px; min-width: 180px; max-width: 320px;
+  flex: 1 1 200px; min-width: 160px; max-width: 280px;
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 5px 12px;
+  padding: 4px 12px;
   border-radius: 999px;
-  background: var(--surface-2);
+  background: var(--surface);
   border: 1px solid var(--border-faint);
 }
 .sl-search .icon { color: var(--ink-faint); font-size: 13px; }
@@ -458,23 +613,40 @@ body {
 }
 .sl-search input::placeholder { color: var(--ink-faint); }
 
+/* Density — same segmented pattern as pill groups for shape consistency */
 .sl-density {
   display: inline-flex;
-  background: var(--surface-2);
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface);
   border: 1px solid var(--border-faint);
-  border-radius: 6px;
-  overflow: hidden;
+  border-radius: 999px;
 }
 .sl-density-btn {
   border: 0;
   background: transparent;
-  padding: 4px 10px;
+  padding: var(--pill-py) var(--pill-px);
+  border-radius: 999px;
   font-family: var(--font-sans);
   font-size: var(--fs-sm);
   color: var(--ink-muted);
   cursor: pointer;
+  transition: background 120ms, color 120ms;
 }
-.sl-density-btn.active { background: var(--ink); color: var(--surface); }
+.sl-density-btn:hover { color: var(--ink); }
+.sl-density-btn.active {
+  background: var(--surface-2);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(42, 40, 34, 0.08), 0 0 0 1px var(--border);
+  font-weight: 600;
+}
+
+.sl-toolbar-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
 
 .sl-switch {
   display: inline-flex; align-items: center; gap: 6px;
@@ -620,29 +792,41 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .sl-panel-note textarea:focus { border-color: var(--ink-muted); }
 
 /* ========================================================================
-   Hover actions on item rows + inline dropdown menu
+   Item action tail — always-visible primary glyphs + ⋯ menu (click-reveal)
    ======================================================================== */
-.sl-item-actions {
-  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
-  display: inline-flex; gap: 2px;
-  opacity: 0; pointer-events: none;
-  transition: opacity 120ms;
-  background: var(--surface);
-  padding: 3px;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  z-index: 10;
+.sl-item-tail {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  align-self: center;
+  flex-shrink: 0;
 }
-.sl-item:hover .sl-item-actions { opacity: 1; pointer-events: auto; }
-.sl-item-actions button {
-  border: 0; background: transparent;
-  font-size: 13px;
-  color: var(--ink-muted);
-  padding: 4px 6px;
+
+/* Always-visible primary glyphs (Slack jump, snooze) — plain icon at rest,
+   subtle tint on hover. Accent color stays restrained. */
+.sl-item-go {
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: var(--action-fs);
+  padding: var(--action-pad) calc(var(--action-pad) + 2px);
   border-radius: 4px;
   cursor: pointer;
+  font-family: inherit;
+  line-height: 1;
+  transition: color 120ms, background 120ms;
 }
-.sl-item-actions button:hover { background: var(--surface-2); color: var(--ink); }
+.sl-item-go:hover { color: var(--ink); background: var(--surface-2); }
+.sl-item-go.primary { color: var(--chan-accent); }
+.sl-item-go.primary:hover {
+  color: var(--surface);
+  background: var(--chan-accent);
+}
+.sl-col--dms .sl-item-go.primary { color: var(--dm-accent); }
+.sl-col--dms .sl-item-go.primary:hover {
+  color: var(--surface);
+  background: var(--dm-accent);
+}
 
 .sl-menu {
   position: absolute;
@@ -686,11 +870,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 </style>
 </head>
 <body>
-  <!-- Topbar: wordmark · freshness · theme toggle · reload -->
+  <!-- Topbar: brand + freshness (left) · theme toggle + reload (right) -->
   <header class="sl-topbar">
-    <div class="sl-brand">SlackLens</div>
-    <div class="sl-topbar-right">
+    <div class="sl-topbar-left">
+      <div class="sl-brand">SlackLens</div>
       <div id="freshness" class="sl-fresh">0 · loading…</div>
+    </div>
+    <div class="sl-topbar-right">
       <button id="themeToggle" class="sl-iconbtn" type="button" aria-label="Toggle theme">☾</button>
     </div>
   </header>
@@ -706,26 +892,28 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
     </div>
     <div class="sl-divider"></div>
     <div class="sl-pills" id="statusPills" aria-label="Status filter">
-      <button class="sl-pill" data-status="BACKLOG"     type="button">Backlog</button>
-      <button class="sl-pill" data-status="IN PROGRESS" type="button">In progress</button>
-      <button class="sl-pill" data-status="WAITING"     type="button">Waiting</button>
-      <button class="sl-pill" data-status="DONE"        type="button">Done</button>
+      <button class="sl-pill" data-status="BACKLOG"     type="button">Backlog <span class="count">0</span></button>
+      <button class="sl-pill" data-status="IN PROGRESS" type="button">In progress <span class="count">0</span></button>
+      <button class="sl-pill" data-status="WAITING"     type="button">Waiting <span class="count">0</span></button>
+      <button class="sl-pill" data-status="DONE"        type="button">Done <span class="count">0</span></button>
     </div>
     <div class="sl-divider"></div>
     <label class="sl-search">
       <span class="icon" aria-hidden="true">⌕</span>
       <input id="searchInput" type="text" placeholder="Search channel, person, text…" />
     </label>
-    <div class="sl-density" role="radiogroup" aria-label="Density">
-      <button class="sl-density-btn" data-density="compact"  type="button">Compact</button>
-      <button class="sl-density-btn active" data-density="balanced" type="button">Balanced</button>
-      <button class="sl-density-btn" data-density="spacious" type="button">Spacious</button>
+    <div class="sl-toolbar-right">
+      <div class="sl-density" role="radiogroup" aria-label="Density">
+        <button class="sl-density-btn" data-density="compact"  type="button">Compact</button>
+        <button class="sl-density-btn active" data-density="balanced" type="button">Balanced</button>
+        <button class="sl-density-btn" data-density="spacious" type="button">Spacious</button>
+      </div>
+      <label class="sl-switch" id="showSnoozedLabel">
+        <input id="showSnoozed" type="checkbox" />
+        <span class="track"></span>
+        <span class="label">Show snoozed</span>
+      </label>
     </div>
-    <label class="sl-switch" id="showSnoozedLabel">
-      <input id="showSnoozed" type="checkbox" />
-      <span class="track"></span>
-      <span class="label">Show snoozed</span>
-    </label>
   </nav>
 
   <!-- Banner: stale cache / schema mismatch / fetch-failed -->
@@ -798,6 +986,14 @@ window.__SLACK_CACHE__ = {
 // ---------- State ----------
 const LS_KEY = 'slackTriageOverrides.v1';
 const STATUSES = ['AWAITING YOUR REPLY','BACKLOG','IN PROGRESS','WAITING','DISCUSSION','DONE'];
+const STATUS_LABELS = {
+  'AWAITING YOUR REPLY': 'Needs reply',
+  'BACKLOG': 'Backlog',
+  'IN PROGRESS': 'In progress',
+  'WAITING': 'Waiting',
+  'DISCUSSION': 'Discussion',
+  'DONE': 'Done',
+};
 const ME_ID = '';
 const ME_NAME = '';
 const VIP_IDS = [];  // VIPs (filled by slacklens-setup)
@@ -1297,6 +1493,9 @@ function renderChannel(ch, colKind) {
 function renderItem(it) {
   const row = document.createElement('article');
   row.className = 'sl-item';
+  // Full status in title so narrow cards (chip hidden via container-query)
+  // still surface it on hover.
+  row.title = STATUS_LABELS[(effectiveItem(it).status || 'AWAITING YOUR REPLY').toUpperCase()] || '';
   row.dataset.key = it.key;
   row.dataset.status = (effectiveItem(it).status || 'AWAITING YOUR REPLY').toUpperCase();
 
@@ -1311,10 +1510,16 @@ function renderItem(it) {
   const from = document.createElement('span');
   from.className = 'sl-item-from';
   from.textContent = cleanName(it.last_from || '');
+  const right = document.createElement('span');
+  right.className = 'sl-item-head-right';
+  const status = document.createElement('span');
+  status.className = 'sl-item-status';
+  status.textContent = STATUS_LABELS[row.dataset.status] || row.dataset.status;
   const time = document.createElement('span');
   time.className = 'sl-item-time';
   time.textContent = (it.last_time || '').slice(11, 16);
-  head.appendChild(from); head.appendChild(time);
+  right.appendChild(status); right.appendChild(time);
+  head.appendChild(from); head.appendChild(right);
   body.appendChild(head);
 
   const msg = document.createElement('div');
@@ -1340,17 +1545,47 @@ function renderItem(it) {
   const snoozedUntil = eff2.snooze_until ? Date.parse(eff2.snooze_until) : 0;
   if (snoozedUntil && snoozedUntil > Date.now()) row.dataset.snoozed = '1';
 
-  // Hover action cluster
-  const actions = document.createElement('div');
-  actions.className = 'sl-item-actions';
-  actions.innerHTML = [
-    '<button data-action="status"  title="Change status"  aria-label="Change status">◐</button>',
-    '<button data-action="snooze"  title="Snooze"         aria-label="Snooze">☾</button>',
-    '<button data-action="done"    title="Mark done"      aria-label="Mark done">✓</button>',
-    '<button data-action="open"    title="Open in Slack"  aria-label="Open in Slack">↗</button>',
-    '<button data-action="copy"    title="Copy permalink" aria-label="Copy permalink">⎘</button>',
-  ].join('');
-  row.appendChild(actions);
+  // Action tail: three primary glyphs always visible + overflow menu on click
+  const tail = document.createElement('div');
+  tail.className = 'sl-item-tail';
+
+  const repliedBtn = document.createElement('button');
+  repliedBtn.className = 'sl-item-go';
+  repliedBtn.type = 'button';
+  repliedBtn.dataset.action = 'replied';
+  repliedBtn.title = 'Mark replied (waiting on them)';
+  repliedBtn.setAttribute('aria-label', 'Mark replied');
+  repliedBtn.textContent = '↩';
+  tail.appendChild(repliedBtn);
+
+  const snoozeBtn = document.createElement('button');
+  snoozeBtn.className = 'sl-item-go';
+  snoozeBtn.type = 'button';
+  snoozeBtn.dataset.action = 'snooze';
+  snoozeBtn.title = 'Snooze';
+  snoozeBtn.setAttribute('aria-label', 'Snooze');
+  snoozeBtn.textContent = '☾';
+  tail.appendChild(snoozeBtn);
+
+  const openBtn = document.createElement('button');
+  openBtn.className = 'sl-item-go primary';
+  openBtn.type = 'button';
+  openBtn.dataset.action = 'open';
+  openBtn.title = 'Open in Slack';
+  openBtn.setAttribute('aria-label', 'Open in Slack');
+  openBtn.textContent = '↗';
+  tail.appendChild(openBtn);
+
+  const moreBtn = document.createElement('button');
+  moreBtn.className = 'sl-item-go';
+  moreBtn.type = 'button';
+  moreBtn.dataset.action = 'more';
+  moreBtn.title = 'More actions';
+  moreBtn.setAttribute('aria-label', 'More actions');
+  moreBtn.textContent = '⋯';
+  tail.appendChild(moreBtn);
+
+  row.appendChild(tail);
 
   return row;
 }
@@ -1393,17 +1628,25 @@ function applyFilter(xs) {
 
 function updateCounts(shownItems) {
   const counts = { all: shownItems.length, needs_reply: 0, mentions: 0, dms: 0, channels: 0 };
+  const statusCounts = { 'BACKLOG': 0, 'IN PROGRESS': 0, 'WAITING': 0, 'DONE': 0, 'DISCUSSION': 0, 'AWAITING YOUR REPLY': 0 };
   for (const it of shownItems) {
     const eff = effectiveItem(it);
     if (eff.needs_reply)            counts.needs_reply++;
     if (it.source === 'mention')    counts.mentions++;
     if (it.kind === 'dm')           counts.dms++;
     if (it.kind === 'channel')      counts.channels++;
+    const s = (eff.status || 'AWAITING YOUR REPLY').toUpperCase();
+    if (statusCounts[s] !== undefined) statusCounts[s]++;
   }
   document.querySelectorAll('#categoryPills .sl-pill').forEach(btn => {
     const k = btn.dataset.scope;
     const c = btn.querySelector('.count');
     if (c && counts[k] !== undefined) c.textContent = counts[k];
+  });
+  document.querySelectorAll('#statusPills .sl-pill').forEach(btn => {
+    const k = btn.dataset.status;
+    const c = btn.querySelector('.count');
+    if (c && statusCounts[k] !== undefined) c.textContent = statusCounts[k];
   });
 }
 
@@ -1709,11 +1952,25 @@ function closePanel() {
 // ========================================================================
 function handleRowAction(action, it, anchorEl) {
   if (!it) return;
-  if (action === 'open')   { if (it.permalink) window.open(it.permalink, '_blank'); return; }
-  if (action === 'copy')   { if (it.permalink && navigator.clipboard) navigator.clipboard.writeText(it.permalink); return; }
-  if (action === 'done')   { overrideFor(it.key).status = 'DONE'; saveOverrides(); render(); return; }
-  if (action === 'status') return openStatusMenu(it, anchorEl);
-  if (action === 'snooze') return openSnoozeMenu(it, anchorEl);
+  if (action === 'open')    { if (it.permalink) window.open(it.permalink, '_blank'); return; }
+  if (action === 'copy')    { if (it.permalink && navigator.clipboard) navigator.clipboard.writeText(it.permalink); return; }
+  if (action === 'done')    { overrideFor(it.key).status = 'DONE'; saveOverrides(); render(); return; }
+  if (action === 'replied') { overrideFor(it.key).status = 'WAITING'; saveOverrides(); render(); return; }
+  if (action === 'status')  return openStatusMenu(it, anchorEl);
+  if (action === 'snooze')  return openSnoozeMenu(it, anchorEl);
+  if (action === 'more')    return openMoreMenu(it, anchorEl);
+}
+
+function openMoreMenu(it, anchorEl) {
+  // Replied + Snooze are also listed here because the primary icons for
+  // both get hidden in narrow-card container queries; menu stays complete.
+  openMenu(anchorEl, [
+    { label: '↩ Mark replied',     onClick: () => { overrideFor(it.key).status = 'WAITING'; saveOverrides(); render(); } },
+    { label: '☾ Snooze…',          onClick: () => openSnoozeMenu(it, anchorEl) },
+    { label: '✓ Mark done',        onClick: () => { overrideFor(it.key).status = 'DONE'; saveOverrides(); render(); } },
+    { label: '◐ Change status…',   onClick: () => openStatusMenu(it, anchorEl) },
+    { label: '⎘ Copy permalink',   onClick: () => { if (it.permalink && navigator.clipboard) navigator.clipboard.writeText(it.permalink); } },
+  ]);
 }
 
 function openMenu(anchorEl, itemsList) {
@@ -1721,11 +1978,22 @@ function openMenu(anchorEl, itemsList) {
   const menu = document.createElement('div');
   menu.className = 'sl-menu';
   menu.id = 'activeMenu';
+  // Capture reference so a cascading onClick (one that opens a NEW menu)
+  // doesn't accidentally close the freshly-opened menu. See bug: clicking
+  // "Change status…" inside the more-menu used to flash and disappear.
+  const thisMenu = menu;
   for (const mi of itemsList) {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = mi.label;
-    b.addEventListener('click', () => { mi.onClick(); closeOpenMenu(); });
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      mi.onClick();
+      // Only close if this menu is still the active one — if onClick
+      // opened a replacement menu, the reference check fails and we leave
+      // the new menu visible.
+      if (document.getElementById('activeMenu') === thisMenu) thisMenu.remove();
+    });
     menu.appendChild(b);
   }
   const rect = anchorEl.getBoundingClientRect();
@@ -1776,10 +2044,10 @@ function bootSidePanel() {
     if (e.key === 'Escape' && !document.getElementById('sidePanel').hidden) closePanel();
   });
 
-  // Click delegation on the channel flow — handle hover-action clicks first,
+  // Click delegation on the channel flow — action buttons first,
   // fall through to row click → open panel.
   document.getElementById('channelFlow').addEventListener('click', e => {
-    const actBtn = e.target.closest('.sl-item-actions button');
+    const actBtn = e.target.closest('.sl-item-go');
     if (actBtn) {
       const row = actBtn.closest('.sl-item');
       const it = findItem(row.dataset.key);
@@ -1800,11 +2068,12 @@ function bootSidePanel() {
     const it = findItem(row.dataset.key);
     if (!it) return;
     openMenu(row, [
-      { label: 'Open in Slack',   onClick: () => { if (it.permalink) window.open(it.permalink, '_blank'); } },
-      { label: 'Copy permalink',  onClick: () => { if (it.permalink && navigator.clipboard) navigator.clipboard.writeText(it.permalink); } },
-      { label: 'Mark done',       onClick: () => { overrideFor(it.key).status = 'DONE'; saveOverrides(); render(); } },
-      { label: 'Change status…',  onClick: () => openStatusMenu(it, row) },
-      { label: 'Snooze…',         onClick: () => openSnoozeMenu(it, row) },
+      { label: 'Open in Slack',        onClick: () => { if (it.permalink) window.open(it.permalink, '_blank'); } },
+      { label: 'Copy permalink',       onClick: () => { if (it.permalink && navigator.clipboard) navigator.clipboard.writeText(it.permalink); } },
+      { label: 'Mark replied',         onClick: () => { overrideFor(it.key).status = 'WAITING'; saveOverrides(); render(); } },
+      { label: 'Mark done',            onClick: () => { overrideFor(it.key).status = 'DONE'; saveOverrides(); render(); } },
+      { label: 'Change status…',       onClick: () => openStatusMenu(it, row) },
+      { label: 'Snooze…',              onClick: () => openSnoozeMenu(it, row) },
     ]);
   });
 }
