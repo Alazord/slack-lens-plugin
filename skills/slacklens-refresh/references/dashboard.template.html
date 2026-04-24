@@ -1159,15 +1159,26 @@ function normalize() {
   const seen = new Set();
   deriveWorkspaceOrigin();
 
-  // Build a set of every permalink already represented inside some thread.
-  // This replaces the old channel_id-only dedupe in the mentions loop,
-  // which silently dropped independent standalone mentions whenever ANY
-  // thread existed in the same channel — broken for 1:1 DMs with multiple
-  // separate threads from the same person.
+  // Build dedupe sets for bucket→thread collision. Two reasons strings
+  // don't match cleanly:
+  //   (a) Slack permalinks from search-bucket results often carry
+  //       ?thread_ts=... query params; the same message fetched via
+  //       slack_read_thread returns a bare permalink. Same message,
+  //       different strings.
+  //   (b) Some MCP runs return permalinks with trailing slashes or
+  //       case-variant hosts.
+  // So we build BOTH a permalink set and a (channel_id, ts) tuple set.
+  // A bucket mention is "already represented by a thread" iff either
+  // set matches. This covers the thread-parent-also-in-mentions case
+  // that would otherwise double-render an inferred thread card AND a
+  // standalone raw-text card for the same Slack message.
   const threadPermalinks = new Set();
+  const threadMsgKeys    = new Set();   // "<channel_id>:<ts>"
   Object.values(raw.threads || {}).forEach(t => {
+    const cid = t && t.channel_id || '';
     (t.messages || []).forEach(msg => {
       if (msg.permalink) threadPermalinks.add(msg.permalink);
+      if (msg.ts) threadMsgKeys.add(cid + ':' + msg.ts);
     });
   });
 
@@ -1296,6 +1307,11 @@ function normalize() {
   allQueries.forEach(q => (q.results || []).forEach(m => {
     if (!m.permalink) return;
     if (threadPermalinks.has(m.permalink)) return;
+    // Channel+ts dedupe — catches the common case where a thread-parent
+    // message appears both inside the thread (via slack_read_thread)
+    // and in the channels bucket (via slack_search), with slightly
+    // different permalink forms.
+    if (threadMsgKeys.has((m.channel_id || '') + ':' + (m.message_ts || ''))) return;
     if (seen.has(m.permalink)) return; seen.add(m.permalink);
     const lastIsMe   = isMe(m.from_user);
     const senderId   = resultUserId(m);
