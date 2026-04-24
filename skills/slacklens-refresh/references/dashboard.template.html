@@ -40,10 +40,13 @@
   --ink-muted: #5a5648;
   --ink-faint: #908b78;
   --vip-red: #b64535;
-  --status-red: #b64535;
-  --status-amber: #b8821f;
-  --status-gray: #d6d0bd;
-  --status-green: #5a7f5a;
+  --status-red:    #b64535;   /* AWAITING YOUR REPLY */
+  --status-amber:  #b8821f;   /* IN PROGRESS */
+  --status-blue:   #3a6fa8;   /* BACKLOG */
+  --status-violet: #7a4f9a;   /* WAITING */
+  --status-teal:   #2f7a72;   /* DISCUSSION */
+  --status-gray:   #d6d0bd;   /* (legacy; kept for old item-bar fallbacks) */
+  --status-green:  #5a7f5a;   /* DONE */
 
   /* Column tints — accents for the Channels vs DMs split.
      Accent = visible left-border; bg = tinted wash behind each card. */
@@ -105,10 +108,13 @@
   --ink-muted: #b0a991;
   --ink-faint: #8a8270;
   --vip-red: #e87b68;
-  --status-red: #e87b68;
-  --status-amber: #d4a33a;
-  --status-gray: #4a4539;
-  --status-green: #7ea97e;
+  --status-red:    #e87b68;
+  --status-amber:  #d4a33a;
+  --status-blue:   #6ea5d6;
+  --status-violet: #b58cd0;
+  --status-teal:   #5fbab0;
+  --status-gray:   #4a4539;
+  --status-green:  #7ea97e;
   --chan-accent: #7ab1bf;
   --chan-col-bg: #1c1f1e;
   --chan-bg:     #262320;
@@ -125,6 +131,7 @@
     --surface: #1a1814; --surface-2: #22201b; --border: #2e2b24; --border-faint: #262420;
     --ink: #ede8d6; --ink-muted: #b0a991; --ink-faint: #8a8270;
     --vip-red: #e87b68; --status-red: #e87b68; --status-amber: #d4a33a;
+    --status-blue: #6ea5d6; --status-violet: #b58cd0; --status-teal: #5fbab0;
     --status-gray: #4a4539; --status-green: #7ea97e;
     --chan-accent: #7ab1bf; --chan-col-bg: #1c1f1e; --chan-bg: #262320;
     --dm-accent: #d9a877;   --dm-col-bg: #231e18;   --dm-bg: #2a2520;
@@ -340,10 +347,11 @@ body {
   background: var(--status-red);  /* default; overridden per data-status below */
 }
 .sl-item[data-status="AWAITING YOUR REPLY"] .sl-item-bar { background: var(--status-red); }
+.sl-item[data-status="BACKLOG"]             .sl-item-bar { background: var(--status-blue); }
 .sl-item[data-status="IN PROGRESS"]         .sl-item-bar { background: var(--status-amber); }
-.sl-item[data-status="DISCUSSION"]          .sl-item-bar { background: var(--status-amber); }
-.sl-item[data-status="WAITING"]             .sl-item-bar { background: var(--status-gray); }
-.sl-item[data-status="BACKLOG"]             .sl-item-bar { background: var(--status-gray); }
+.sl-item[data-status="WAITING"]             .sl-item-bar { background: var(--status-violet); }
+.sl-item[data-status="DISCUSSION"]          .sl-item-bar { background: var(--status-teal); }
+.sl-item[data-status="FYI"]                 .sl-item-bar { background: var(--ink-faint); }
 .sl-item[data-status="DONE"]                .sl-item-bar { background: var(--status-green); }
 
 .sl-item-head {
@@ -379,21 +387,31 @@ body {
 }
 .sl-item[data-status="AWAITING YOUR REPLY"] .sl-item-status {
   color: var(--status-red);
-  background: color-mix(in srgb, var(--status-red) 10%, transparent);
+  background: color-mix(in srgb, var(--status-red) 12%, transparent);
 }
-.sl-item[data-status="IN PROGRESS"] .sl-item-status,
-.sl-item[data-status="DISCUSSION"]  .sl-item-status {
-  color: var(--status-amber);
-  background: color-mix(in srgb, var(--status-amber) 10%, transparent);
-}
-.sl-item[data-status="WAITING"] .sl-item-status,
 .sl-item[data-status="BACKLOG"] .sl-item-status {
+  color: var(--status-blue);
+  background: color-mix(in srgb, var(--status-blue) 12%, transparent);
+}
+.sl-item[data-status="IN PROGRESS"] .sl-item-status {
+  color: var(--status-amber);
+  background: color-mix(in srgb, var(--status-amber) 14%, transparent);
+}
+.sl-item[data-status="WAITING"] .sl-item-status {
+  color: var(--status-violet);
+  background: color-mix(in srgb, var(--status-violet) 12%, transparent);
+}
+.sl-item[data-status="DISCUSSION"] .sl-item-status {
+  color: var(--status-teal);
+  background: color-mix(in srgb, var(--status-teal) 12%, transparent);
+}
+.sl-item[data-status="FYI"] .sl-item-status {
   color: var(--ink-faint);
   background: var(--surface-2);
 }
 .sl-item[data-status="DONE"] .sl-item-status {
   color: var(--status-green);
-  background: color-mix(in srgb, var(--status-green) 10%, transparent);
+  background: color-mix(in srgb, var(--status-green) 12%, transparent);
 }
 .sl-item-msg {
   font-family: var(--font-serif);
@@ -639,10 +657,10 @@ body {
 /* Color-coded leading dot per filter — signals which content tint a pill targets */
 .sl-pill::before {
   content: "";
-  width: 6px; height: 6px;
+  width: 8px; height: 8px;
   border-radius: 50%;
   background: currentColor;
-  opacity: 0.55;
+  opacity: 0.85;
   flex-shrink: 0;
 }
 .sl-pill[data-scope="all"]::before         { background: var(--ink-faint); }
@@ -650,9 +668,11 @@ body {
 .sl-pill[data-scope="mentions"]::before    { background: var(--vip-red); }
 .sl-pill[data-scope="dms"]::before         { background: var(--dm-accent); }
 .sl-pill[data-scope="channels"]::before    { background: var(--chan-accent); }
-.sl-pill[data-status="BACKLOG"]::before     { background: var(--status-gray); }
+.sl-pill[data-status="BACKLOG"]::before     { background: var(--status-blue); }
 .sl-pill[data-status="IN PROGRESS"]::before { background: var(--status-amber); }
-.sl-pill[data-status="WAITING"]::before     { background: var(--status-gray); }
+.sl-pill[data-status="WAITING"]::before     { background: var(--status-violet); }
+.sl-pill[data-status="DISCUSSION"]::before  { background: var(--status-teal); }
+.sl-pill[data-status="FYI"]::before         { background: var(--ink-faint); }
 .sl-pill[data-status="DONE"]::before        { background: var(--status-green); }
 .sl-pill.active::before { opacity: 1; }
 
