@@ -507,35 +507,301 @@ if mode == "FULL" and new_total == 0 and prior is not None:
         # Exit BEFORE assembling/writing anything. Old cache stays as-is.
         raise SystemExit(0)
 
-# --- Assemble final data dict ---
+# --- Step 2.5a — Select threads needing semantic inference (v3) ---
+# A thread needs re-inference iff it has no prior `inference` field OR
+# its newest message.ts exceeds `inference.inferred_for_ts`. Threads
+# whose latest message hasn't advanced reuse the prior inference — that
+# cache hit is the whole reason inference cost stays flat run-to-run.
+MAX_MSGS_PER_THREAD = 20
+BATCH_SIZE          = 10
+
+def _newest_ts(t):
+    try:
+        return max((float(m.get("ts") or 0) for m in (t.get("messages") or [])),
+                   default=0.0)
+    except Exception:
+        return 0.0
+
+to_infer = []   # list of (thread_key, compact_rep)
+for k, t in threads_new.items():
+    msgs = t.get("messages") or []
+    if not msgs:
+        continue
+    newest = _newest_ts(t)
+    prev = t.get("inference") or {}
+    try:
+        prev_for = float(prev.get("inferred_for_ts") or 0)
+    except (TypeError, ValueError):
+        prev_for = 0.0
+    if prev and newest <= prev_for:
+        continue   # cache hit — reuse existing inference
+    trimmed = msgs[-MAX_MSGS_PER_THREAD:]
+    to_infer.append((k, {
+        "thread_key": k,
+        "channel":    t.get("channel_name") or t.get("channel_id") or "?",
+        "messages": [{"from": m.get("from") or "",
+                      "ts":   m.get("ts") or "",
+                      "text": m.get("text") or ""} for m in trimmed],
+    }))
+
+inference_run_count = len(to_infer)
+inference_hit_count = len(threads_new) - inference_run_count
+
+# --- Step 2.5b — Write batch files the model will read in Step 2.5 ---
+# /tmp/slacklens-inference-batch-<n>.json contains:
+#   { me_id, me_name, vips, threads: [...up to BATCH_SIZE...] }
+# The model opens each, produces /tmp/slacklens-inference-result-<n>.json
+# as a JSON array with one {actions, status} per thread in the same order.
+cfg = json.load(open(os.path.join(home, "config.json")))
+priority = cfg.get("priority_people", [])
+
+batches = []   # [(batch_path, [thread_key, ...]), ...]
+for i in range(0, len(to_infer), BATCH_SIZE):
+    chunk = to_infer[i:i+BATCH_SIZE]
+    batch_path = "/tmp/slacklens-inference-batch-" + str(i // BATCH_SIZE) + ".json"
+    with open(batch_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "me_id":   cfg["user"]["slack_id"],
+            "me_name": cfg["user"]["name"],
+            "vips":    [{"id": p["id"], "name": p["name"]} for p in priority],
+            "threads": [rep for _, rep in chunk],
+        }, f, ensure_ascii=False, indent=2)
+    batches.append((batch_path, [k for k, _ in chunk]))
+
+# --- Step 2.5c — Stage everything else Step 2.6 needs ---
+# Step 2.6 runs in a separate Python block AFTER the model produces
+# inference results. Persist enough state to pick up from here.
+staged_path = "/tmp/slacklens-staged.json"
+with open(staged_path, "w", encoding="utf-8") as f:
+    json.dump({
+        "mode":                 mode,
+        "search_results":       sr,
+        "threads":              threads_new,
+        "batches":              batches,
+        "payload_bytes":        payload_bytes,
+        "tokens_est":           tokens_est,
+        "results_repaired":     results_repaired,
+        "restored_from_backup": restored_from_backup,
+        "inference_run_count":  inference_run_count,
+        "inference_hit_count":  inference_hit_count,
+    }, f, ensure_ascii=False)
+
+try:
+    os.remove(tmp)
+except OSError:
+    pass
+
+print("INFERENCE_BATCHES=" + str(len(batches)))
+print("inference_run=" + str(inference_run_count)
+      + ", inference_hits=" + str(inference_hit_count))
+PY
+```
+
+## Step 2.5 — Semantic inference pass (v3, new)
+
+The Step 2 Python block wrote one or more batch files to
+`/tmp/slacklens-inference-batch-<n>.json`. **You (the model executing
+this skill) now produce one `/tmp/slacklens-inference-result-<n>.json`
+per batch**, following the rules below. No Slack API, no tools — this
+is pure inference done in-session.
+
+### For each batch file
+
+1. Read `/tmp/slacklens-inference-batch-<n>.json`. It contains `me_id`,
+   `me_name`, `vips` (priority contacts), and `threads` (array of
+   `{thread_key, channel, messages}`).
+2. For each element in `threads` (in order), produce one object:
+
+   ```json
+   {
+     "actions": ["..."],
+     "status":  "AWAITING_REPLY"
+   }
+   ```
+
+3. Use the Write tool to save the **array** (same length as `threads`,
+   same order) to `/tmp/slacklens-inference-result-<n>.json`. Output
+   JSON only — no prose, no code fences.
+
+### Inference rules
+
+- **`actions`** — 0–3 short imperatives (each ≤80 chars) phrased TO the
+  user. Good: `"Reply to Alice about the ingest-bug ETA"`,
+  `"Confirm 3pm call with Eve on release plan"`, `"Review PR #412"`,
+  `"Nothing needed — already handled"`. Bad: narration
+  (`"User was asked a question"`), Slack-copy (`"<@U0ME> please review"`),
+  or >3 items. Empty list OR `["Nothing needed"]` when the thread is
+  fully resolved.
+- **`status`** — exactly one of `"AWAITING_REPLY"`, `"WAITING_ON_THEM"`,
+  `"DONE"`, `"DISCUSSION"`, `"FYI"`.
+  - `AWAITING_REPLY` — someone asked the user something and the user
+    hasn't substantively answered. A one-word ack like "ok" or "noted"
+    does NOT count as answering a real ask — flag as AWAITING_REPLY.
+  - `WAITING_ON_THEM` — the user asked, is blocked on someone else.
+  - `DONE` — resolved.
+  - `DISCUSSION` — general chat, user not specifically addressed.
+  - `FYI` — user passively mentioned / CC'd, no action implied.
+- Messages may mix English and Hinglish (Hindi in Latin script). Treat
+  both as equivalent when extracting intent. Example: `"bhai kal wala
+  PR review kar diya kya?"` = "did you review yesterday's PR?".
+- Flag priority contacts in `actions` wording when relevant ("Reply to
+  Alice VIP...") — helps the user scan the dashboard.
+- Output an array whose length EXACTLY equals `len(threads)` in input
+  order. If you can't infer a thread, still emit a placeholder:
+  `{"actions": [], "status": "DISCUSSION"}` — the Python merge in Step
+  2.6 validates and drops bad entries.
+
+### If a batch looks malformed when read back
+
+Re-read your own output. If it's not valid JSON or the array length is
+wrong, regenerate it. If you hit a hard failure on a single thread,
+emit `{"actions": [], "status": "DISCUSSION"}` for that slot and keep
+going. Step 2.6 tolerates and logs per-element failures.
+
+After every batch has a corresponding result file on disk, proceed to
+Step 2.6.
+
+## Step 2.6 — Merge inference + assemble + write cache (v3)
+
+```bash
+python3 - <<'PY'
+import json, os, re
+from datetime import datetime, timezone
+
+home = os.path.expanduser("~/.slacklens")
+staged_path = "/tmp/slacklens-staged.json"
+if not os.path.isfile(staged_path):
+    # Step 2 either crashed or early-exited (suspicious-refresh path).
+    # Old cache.json stays untouched. Nothing for Step 2.6 to do.
+    print("Step 2.6 skipped: no staged payload "
+          "(Step 2 likely early-exited via suspicious-refresh guard — "
+          "old cache is preserved)")
+    raise SystemExit(0)
+
+with open(staged_path, "r", encoding="utf-8") as f:
+    staged = json.load(f)
+
+mode                 = staged["mode"]
+sr                   = staged["search_results"]
+threads_new          = staged["threads"]
+batches              = staged["batches"]
+payload_bytes        = int(staged.get("payload_bytes") or 0)
+tokens_est           = int(staged.get("tokens_est") or 0)
+results_repaired     = int(staged.get("results_repaired") or 0)
+restored_from_backup = bool(staged.get("restored_from_backup") or False)
+inference_run_count  = int(staged.get("inference_run_count") or 0)
+inference_hit_count  = int(staged.get("inference_hit_count") or 0)
+
+VALID_STATUSES = {"AWAITING_REPLY", "WAITING_ON_THEM", "DONE", "DISCUSSION", "FYI"}
+
+def _valid_elem(elem):
+    if not isinstance(elem, dict):
+        return False
+    acts = elem.get("actions")
+    if not isinstance(acts, list) or len(acts) > 3:
+        return False
+    if not all(isinstance(a, str) and len(a) <= 80 for a in acts):
+        return False
+    if elem.get("status") not in VALID_STATUSES:
+        return False
+    return True
+
+now_iso = datetime.now(timezone.utc).astimezone().isoformat()
+inference_failures = 0
+inference_tokens_est = 0
+
+# --- Merge inference results back onto threads_new ---
+for idx, (batch_path, keys) in enumerate(batches):
+    try:
+        inference_tokens_est += os.path.getsize(batch_path) // 4
+    except OSError:
+        pass
+    result_path = "/tmp/slacklens-inference-result-" + str(idx) + ".json"
+    arr = None
+    try:
+        arr = json.load(open(result_path, encoding="utf-8"))
+    except Exception:
+        pass
+    if not isinstance(arr, list) or len(arr) != len(keys):
+        inference_failures += len(keys)
+        print("INFERENCE BATCH " + str(idx) + " FAILED: expected "
+              + str(len(keys)) + " elements, got "
+              + str(type(arr).__name__) + "/"
+              + (str(len(arr)) if isinstance(arr, list) else "?"))
+        continue
+    for k, elem in zip(keys, arr):
+        if not _valid_elem(elem):
+            inference_failures += 1
+            continue
+        t = threads_new.get(k)
+        if not t:
+            continue
+        newest = 0.0
+        try:
+            newest = max((float(m.get("ts") or 0) for m in (t.get("messages") or [])),
+                         default=0.0)
+        except Exception:
+            newest = 0.0
+        actions = list(elem["actions"])
+        status  = elem["status"]
+        # needs_action: has actions AND not a resolved state AND not a
+        # "Nothing needed" soft-ack.
+        soft_noop = (len(actions) == 1
+                     and actions[0].strip().lower().startswith("nothing"))
+        needs_action = (len(actions) > 0
+                        and status not in ("DONE", "FYI")
+                        and not soft_noop)
+        t["inference"] = {
+            "actions":         actions,
+            "status":          status,
+            "needs_action":    needs_action,
+            "inferred_at":     now_iso,
+            "inferred_for_ts": repr(newest),
+        }
+
+# Cleanup /tmp payloads (batch + result files + staged)
+for idx, (batch_path, _) in enumerate(batches):
+    for p in (batch_path, "/tmp/slacklens-inference-result-" + str(idx) + ".json"):
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+try:
+    os.remove(staged_path)
+except OSError:
+    pass
+
+# --- Assemble final data dict (v3) ---
 # version = cache schema version. Dashboard + doctor read this to detect
 # drift. Bump whenever we change bucket keys or per-result field names.
 #
 #   v1: mentions/dms/channels buckets + threads dict; string from_user.
 #   v2: adds from_user_id, mentioned_ids per result + per thread message,
-#       and reply_count per thread. Backward compatible — v1 fields still
-#       present; v2 readers use new fields if populated, else derive.
+#       and reply_count per thread.
+#   v3: adds per-thread `inference` {actions, status, needs_action,
+#       inferred_at, inferred_for_ts}. Dashboard renders inference.actions[0]
+#       as the card conclusion; falls back to regex inferStatus + last_text
+#       preview when absent (pre-v3 caches).
 data = {
-    "version": 2,
+    "version": 3,
     "refreshed_at": datetime.now().astimezone().isoformat(),
     "mode": mode,
     "search_results": sr,
     "threads": threads_new,
 }
 
+cache_path = os.path.join(home, "cache.json")
+dash_path  = os.path.join(home, "dashboard.html")
+
 # --- Dashboard template re-copy from plugin root (picks up UI updates) ---
-# Do substitutions in memory and let the atomic-write stage below write
-# the final text. Never clobber dashboard.html directly — a crash between
-# template-copy and substitution would leave the user with an unsubstituted
-# template (no identity, no VIPs).
-dash_path = os.path.join(home, "dashboard.html")
+cfg = json.load(open(os.path.join(home, "config.json")))
 plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT", "").strip()
+html = None
 if plugin_root:
     tmpl = os.path.join(plugin_root, "skills", "slacklens-refresh",
                         "references", "dashboard.template.html")
     if os.path.isfile(tmpl):
         h = open(tmpl, "r", encoding="utf-8").read()
-        cfg = json.load(open(os.path.join(home, "config.json")))
         user = cfg["user"]
         priority = cfg.get("priority_people", [])
         vip_ids   = [p["id"]   for p in priority]
@@ -553,25 +819,14 @@ if plugin_root:
                          lambda _m: "const VIP_IDS = "   + json.dumps(vip_ids),   h, "VIP_IDS")
         h = _sub_checked(r"const VIP_NAMES\s*=\s*\[[^\]]*\]",
                          lambda _m: "const VIP_NAMES = " + json.dumps(vip_names), h, "VIP_NAMES")
-        # `h` now holds a fully-substituted template in memory. Do NOT
-        # write it to disk yet — the final atomic_write below handles that.
         html = h
-    else:
-        html = None
-else:
-    html = None
-
-# If the template step didn't run (no $CLAUDE_PLUGIN_ROOT, or template
-# missing), fall back to whatever's currently on disk. The cache-blob
-# injection below still needs a dashboard.html to read from.
 if html is None:
     if not os.path.isfile(dash_path):
         raise SystemExit("ERROR: dashboard.html missing and no template to re-copy from — run `set up slacklens`")
     with open(dash_path, "r", encoding="utf-8") as f:
         html = f.read()
 
-# --- Cache-blob injection (operates on the in-memory `html` string) ---
-
+# --- Cache-blob injection ---
 new_json = json.dumps(data, ensure_ascii=False,
                       separators=(",", ":")).replace("</", "<\\/")
 new_assignment = "window.__SLACK_CACHE__ = " + new_json + ";"
@@ -594,11 +849,7 @@ try:
 except Exception as e:
     raise SystemExit("ERROR: injected blob is not valid JSON: " + str(e))
 
-# Atomic writes: write .new → fsync → os.replace. Before overwriting,
-# move the current file to .bak so we keep one generation of history.
-# POSIX os.replace is atomic — a crash mid-write leaves the OLD file
-# untouched, and the next refresh's Step 0 falls back through the
-# .bak chain if .json somehow ends up corrupted anyway.
+# --- Atomic writes ---
 def _atomic_write_text(path, text):
     new_path = path + ".new"
     with open(new_path, "w", encoding="utf-8") as f:
@@ -626,33 +877,48 @@ print("mode=" + mode
       + ", threads=" + str(len(threads_new))
       + ", mentions=" + str(m_count)
       + ", dms=" + str(d_count)
-      + ", channels=" + str(c_count))
+      + ", channels=" + str(c_count)
+      + ", inference_run=" + str(inference_run_count)
+      + ", inference_hits=" + str(inference_hit_count)
+      + ", inference_failures=" + str(inference_failures))
 
 # --- Refresh log (append-only, last 20 entries) ---
-# Extended fields:
-#   results_repaired    — count of per-result defaults we filled in due to
-#                         malformed MCP payloads (0 on a clean refresh).
-#   restored_from_backup — true if Step 0 had to fall back to cache.json.bak
-#                          because cache.json was unreadable. Signals either
-#                          a crashed prior refresh or external tampering.
-_log_entry({
-    "at":                   data["refreshed_at"],
-    "mode":                 mode,
-    "outcome":              "ok",
-    "mentions":             m_count,
-    "dms":                  d_count,
-    "channels":             c_count,
-    "threads":              len(threads_new),
-    "results_repaired":     results_repaired,
-    "restored_from_backup": restored_from_backup,
-    "payload_bytes":        payload_bytes,
-    "tokens_est":           tokens_est,
-})
+# New v3 fields:
+#   inference_run        — number of threads we sent to Claude this run.
+#   inference_hits       — threads reused from cache (no re-inference).
+#   inference_failures   — per-element failures (bad JSON / bad schema).
+#   inference_tokens_est — payload bytes / 4, same heuristic as tokens_est.
+def _log_entry(entry):
+    log_path = os.path.join(home, "refresh.log")
+    try:
+        existing = []
+        if os.path.isfile(log_path):
+            with open(log_path, "r", encoding="utf-8") as f:
+                existing = [ln for ln in f.read().splitlines() if ln.strip()]
+        existing.append(json.dumps(entry, ensure_ascii=False))
+        existing = existing[-20:]
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(existing) + "\n")
+    except OSError:
+        pass
 
-try:
-    os.remove(tmp)
-except OSError:
-    pass
+_log_entry({
+    "at":                    data["refreshed_at"],
+    "mode":                  mode,
+    "outcome":               "ok",
+    "mentions":              m_count,
+    "dms":                   d_count,
+    "channels":              c_count,
+    "threads":               len(threads_new),
+    "results_repaired":      results_repaired,
+    "restored_from_backup":  restored_from_backup,
+    "payload_bytes":         payload_bytes,
+    "tokens_est":            tokens_est,
+    "inference_run":         inference_run_count,
+    "inference_hits":        inference_hit_count,
+    "inference_failures":    inference_failures,
+    "inference_tokens_est":  inference_tokens_est,
+})
 PY
 ```
 
