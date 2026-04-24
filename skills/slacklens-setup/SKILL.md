@@ -144,6 +144,21 @@ If the user says "skip", "none", or "later", use an empty list and
 move on. They can re-run `set up slacklens` any time to add or change
 priority contacts — all other state is preserved.
 
+## Step 3.5 — Ask role
+
+Ask, verbatim:
+
+> What's your engineering role? (e.g. Frontend Engineer, Backend
+> Engineer, Full-stack, DevOps, QA, EM, PM). This helps SlackLens
+> filter out tasks that aren't yours — for example, a Frontend
+> Engineer shouldn't see "deployment pending" as an actionable item,
+> but "cherry-pick pending" or "build pending" still count. Type
+> **skip** to leave it generic.
+
+Capture the answer as `USER_ROLE`. If the user types "skip"/"none",
+use the string `"Software Engineer"` — the inference prompt falls
+back to generic scoping in that case.
+
 ## Step 4 — Write config and dashboard
 
 Use the Bash tool with python3 (NOT a shell heredoc — heredocs escape `\!`
@@ -153,6 +168,7 @@ to `\\!` and corrupt files):
 USER_ID='U01EXAMPLE99' \
 USER_NAME='Jane Doe' \
 USER_EMAIL='jane@example.com' \
+USER_ROLE='Frontend Engineer' \
 PRIORITY_JSON='[{"id":"U02EXAMPLE11","name":"Example Manager"}]' \
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT}" \
 python3 - <<'PY'
@@ -168,6 +184,7 @@ config = {
         "name": os.environ["USER_NAME"],
         "email": os.environ["USER_EMAIL"],
         "slack_id": os.environ["USER_ID"],
+        "role": os.environ.get("USER_ROLE", "Software Engineer"),
     },
     "priority_people": priority,
     "auto_refresh_hours": 8,

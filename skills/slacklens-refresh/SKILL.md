@@ -718,6 +718,8 @@ inference_hit_count = (len(threads_new) - thread_inference_run_count)  # orphans
 cfg = json.load(open(os.path.join(home, "config.json")))
 priority = cfg.get("priority_people", [])
 
+me_role = (cfg.get("user") or {}).get("role") or "Software Engineer"
+
 batches = []   # [(batch_path, [thread_key, ...]), ...]
 for i in range(0, len(to_infer), BATCH_SIZE):
     chunk = to_infer[i:i+BATCH_SIZE]
@@ -726,6 +728,7 @@ for i in range(0, len(to_infer), BATCH_SIZE):
         json.dump({
             "me_id":   cfg["user"]["slack_id"],
             "me_name": cfg["user"]["name"],
+            "me_role": me_role,
             "vips":    [{"id": p["id"], "name": p["name"]} for p in priority],
             "threads": [rep for _, rep in chunk],
         }, f, ensure_ascii=False, indent=2)
@@ -771,7 +774,9 @@ is pure inference done in-session.
 ### For each batch file
 
 1. Read `/tmp/slacklens-inference-batch-<n>.json`. It contains `me_id`,
-   `me_name`, `vips` (priority contacts), and `threads` (array of
+   `me_name`, `me_role` (the user's engineering role — use it to scope
+   which asks are theirs to own; see role-scope rule below), `vips`
+   (priority contacts), and `threads` (array of
    `{thread_key, channel, messages}`). A `thread_key` prefixed with
    `search:` is a standalone bucket mention (a single message with no
    cached thread reply-chain) — infer it the same way, treating the
@@ -839,6 +844,32 @@ is pure inference done in-session.
   for *work* → `BACKLOG`. "What do you think?" = reply. "Please fix
   this" = backlog. When the action list reads like a todo, status is
   usually BACKLOG or IN_PROGRESS, not AWAITING_REPLY.
+- **Role scope — only surface work that belongs to the user's role.**
+  `me_role` (e.g. `"Frontend Engineer"`, `"Backend Engineer"`,
+  `"DevOps"`, `"QA"`, `"PM"`) describes what the user actually does.
+  If a thread's ask clearly falls to a different discipline, DO NOT
+  create an action for it even if the user is tagged — set status
+  `FYI` (or `DISCUSSION` if still an active chat) with empty actions.
+  Rules of thumb for `Frontend Engineer` / `Backend Engineer`:
+  - **Deployment / rollout / "deploy tag to UAT" / "promote to prod"**:
+    devops territory. FYI for a frontend/backend dev who's just cc'd.
+    EXCEPTION: the thread is explicitly asking the dev to hotfix, not
+    to deploy.
+  - **Build / generating a Docker tag / cutting a release build**: dev
+    territory — KEEP as a task.
+  - **Cherry-pick / merge to release branch / backport**: dev
+    territory — KEEP as a task.
+  - **Infra, CI config, secrets, DNS, monitoring alerts**: devops. FYI
+    for a non-devops dev.
+  - **Schema migrations, DB tuning**: backend territory. FYI for a
+    frontend dev.
+  - **Pixel / layout / i18n / RTL / component / UX bugs**: frontend
+    territory.
+  - **Status broadcasts** ("Deployment pending ETA 25 Apr", "UAT
+    deployed") are `FYI` regardless of role unless the thread asks the
+    user for a specific action.
+  When in doubt, prefer FYI over a fake action — a muted card is
+  cheaper than a false positive.
 - Messages may mix English and Hinglish (Hindi in Latin script). Treat
   both as equivalent when extracting intent. Example: `"bhai kal wala
   PR review kar diya kya?"` = "did you review yesterday's PR?".

@@ -280,9 +280,10 @@ body {
 }
 
 /* Responsive action/meta shedding based on card width */
-@container channel (max-width: 400px) {
-  /* Status chip eats too much horizontal room at this width; the 2px
-     left bar color still encodes the same info. */
+@container channel (max-width: 260px) {
+  /* Only hide the status chip on truly tiny cards — the DM column sits
+     around 300-340px and legibility of the chip matters more than the
+     couple of extra pixels it eats. */
   .sl-item-status { display: none; }
 }
 @container channel (max-width: 320px) {
