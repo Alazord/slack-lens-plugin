@@ -1912,6 +1912,18 @@ function applyFilter(xs) {
     const isSnoozed = snoozedUntil && snoozedUntil > now;
     if (isSnoozed && !filter.showSnoozed) return false;
 
+    // No-action hide — when inference ran and concluded nothing is
+    // needed (empty actions on FYI/DONE), don't clutter the dashboard
+    // with "No action needed" cards. The user can still reach them by
+    // clicking the FYI or Done pill explicitly; we only auto-hide when
+    // the status filter is unset OR doesn't specifically target them.
+    const isNoAction = Array.isArray(it.inference_actions)
+                    && it.inference_actions.length === 0
+                    && (eff.status === 'FYI' || eff.status === 'DONE');
+    const statusTargetsNoAction = statusList.length > 0
+      && (statusList.includes('FYI') || statusList.includes('DONE'));
+    if (isNoAction && !statusTargetsNoAction) return false;
+
     // Scope
     if (filter.scope === 'needs_reply'  && !eff.needs_reply)      return false;
     if (filter.scope === 'mentions'     && it.source !== 'mention') return false;
