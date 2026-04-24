@@ -51,6 +51,11 @@ SlackLens — commands you can type in chat
 Both "slacklens" and "slack lens" (with a space) work as triggers.
 State lives under ~/.slacklens/. Full permission inventory:
 docs/PERMISSIONS.md. How priority scoring works: docs/PRIORITY.md.
+
+New in v0.12.0: each card shows a semantic "what to do" line derived
+from the thread — not the raw last Slack message. Hinglish threads
+work natively. Status (Needs reply / Waiting / Done / Discussion / FYI)
+is decided by Claude with access to the whole thread.
 ````
 
 ## Step — decide the closing line

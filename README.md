@@ -57,9 +57,17 @@ Type any of these in a Claude Code chat. For the full list with one-line descrip
 
 The dashboard is a self-contained HTML file at `~/.slacklens/dashboard.html`. It opens in your default browser. Runtimes with a side panel (e.g. Cowork) mirror it there automatically.
 
+## Semantic task inference (v0.12.0+)
+
+Each card shows a one-line **"what to do"** statement derived from the thread (e.g. _"Reply to Alice about the ingest-bug ETA"_, _"Confirm 3pm call with Eve on release plan"_) instead of the raw last Slack message. Status (`Needs reply` / `Waiting` / `Done` / `Discussion` / `FYI`) is decided by Claude with access to the whole thread, not a regex on the last line.
+
+Messages mixing English and Hinglish (Hindi in Latin script) are handled natively — `"bhai kal wala PR review kar diya kya?"` reads the same as _"did you review yesterday's PR?"_.
+
+Inferences are cached per-thread and only re-run when a new message arrives, so the incremental cost of a typical refresh is a few thousand tokens. The side panel's "What to do" block shows the full list of inferred actions (the card only renders the first).
+
 ## How items are ranked
 
-Items are scored by **tier + recency + your overrides**. Tier always dominates recency — a priority contact's 5-hour-old DM sits above a teammate's 30-second-old channel ping. Items you mark DONE or snooze sink below everything.
+Items are scored by **tier + recency + your overrides**. Tier always dominates recency — a priority contact's 5-hour-old DM sits above a teammate's 30-second-old channel ping. Items you mark DONE / FYI or snooze sink below everything.
 
 Full tier table and edge-case rules: [docs/PRIORITY.md](docs/PRIORITY.md).
 
