@@ -1346,6 +1346,23 @@ function normalize() {
     // message, so the pair-check is trivial: is the sender VIP AND does
     // that message tag me?
     const vipTaggedMe = Boolean(senderId && VIP_IDS.includes(senderId) && mentioned.includes(ME_ID));
+    // Per-result inference (set by refresh skill when a bucket mention
+    // has no matching cached thread). Overrides the default
+    // AWAITING-YOUR-REPLY status so passive mentions (thank-yous, FYI
+    // updates, cc-only pings) don't masquerade as needs-reply.
+    const searchInf = m.inference;
+    let searchStatus, searchNeedsReply, searchActions;
+    if (searchInf && typeof searchInf === 'object'
+        && Array.isArray(searchInf.actions)
+        && STATUS_FROM_INFERENCE[searchInf.status]) {
+      searchStatus = STATUS_FROM_INFERENCE[searchInf.status];
+      searchNeedsReply = searchStatus === 'AWAITING YOUR REPLY';
+      searchActions = searchInf.actions;
+    } else {
+      searchStatus = lastIsMe ? 'WAITING' : 'AWAITING YOUR REPLY';
+      searchNeedsReply = !lastIsMe;
+      searchActions = null;
+    }
     items.push({
       key: m.permalink,
       kind: kindFromChannel(m.channel_name, m.channel_id),
@@ -1359,23 +1376,16 @@ function normalize() {
       last_time: m.time,
       last_ts: +m.message_ts || 0,
       msg_count: 1,
-      // reply_count unknown for standalone search results — no thread
-      // was fetched. null signals "unknown" vs "0 known replies".
       reply_count: null,
       participants: [cleanName(m.from_user)].filter(Boolean),
       participant_ids: senderId ? [senderId] : [],
       last_from_id: senderId,
       mentioned_ids_all: mentioned,
       vip_tagged_me: vipTaggedMe,
-      // Single-message items can't be stale-pings (no later messages
-      // to move on without me); kept false for schema consistency.
       stale_ping: false,
-      // Outgoing DMs (dms bucket) have last_from == me; the thread
-      // ball is in the other person's court. Incoming messages keep
-      // the "AWAITING YOUR REPLY" default.
-      status: lastIsMe ? 'WAITING' : 'AWAITING YOUR REPLY',
-      needs_reply: !lastIsMe,
-      inference_actions: null,   // search items have no associated thread inference
+      status: searchStatus,
+      needs_reply: searchNeedsReply,
+      inference_actions: searchActions,
       source: 'search',
     });
   }));

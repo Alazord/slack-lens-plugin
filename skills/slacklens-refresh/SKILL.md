@@ -638,7 +638,7 @@ def _newest_ts(t):
     except Exception:
         return 0.0
 
-to_infer = []   # list of (thread_key, compact_rep)
+to_infer = []   # list of (key, compact_rep) — key prefix "search:" for orphans
 for k, t in threads_new.items():
     msgs = t.get("messages") or []
     if not msgs:
@@ -660,8 +660,55 @@ for k, t in threads_new.items():
                       "text": m.get("text") or ""} for m in trimmed],
     }))
 
+thread_inference_run_count = len(to_infer)
+
+# --- Orphan bucket mentions: single-message items not covered by any
+# cached thread. Without this pass, passive one-liners (thank-yous, FYI
+# status updates, cc-only pings) default to AWAITING-YOUR-REPLY in the
+# dashboard and surface as noisy "needs reply" cards.
+def _parse_thread_ts(permalink):
+    m = re.search(r"thread_ts=([\d.]+)", permalink or "")
+    return m.group(1) if m else None
+
+thread_ts_by_channel = {}
+for _k in threads_new.keys():
+    _ch, _ts = _k.split(":", 1)
+    thread_ts_by_channel.setdefault(_ch, set()).add(_ts)
+
+orphan_count = 0
+for bucket_key in ("mentions", "dms", "channels"):
+    for q in sr.get(bucket_key) or []:
+        for r in q.get("results") or []:
+            ch  = r.get("channel_id") or ""
+            mts = r.get("message_ts") or ""
+            tts = _parse_thread_ts(r.get("permalink"))
+            covered = ((tts and ch in thread_ts_by_channel and tts in thread_ts_by_channel[ch])
+                       or (mts and ch in thread_ts_by_channel and mts in thread_ts_by_channel[ch]))
+            if covered:
+                continue
+            prev = r.get("inference") or {}
+            try:
+                prev_for = float(prev.get("inferred_for_ts") or 0)
+            except (TypeError, ValueError):
+                prev_for = 0.0
+            try:
+                r_ts = float(mts or 0)
+            except (TypeError, ValueError):
+                r_ts = 0.0
+            if prev and r_ts <= prev_for:
+                continue   # cache hit
+            pseudo_key = "search:" + (r.get("permalink") or (ch + ":" + mts))
+            to_infer.append((pseudo_key, {
+                "thread_key": pseudo_key,
+                "channel":    r.get("channel_name") or ch or "?",
+                "messages":   [{"from": r.get("from_user") or "",
+                                "ts":   mts,
+                                "text": r.get("text") or ""}],
+            }))
+            orphan_count += 1
+
 inference_run_count = len(to_infer)
-inference_hit_count = len(threads_new) - inference_run_count
+inference_hit_count = (len(threads_new) - thread_inference_run_count)  # orphans not counted in hits
 
 # --- Step 2.5b — Write batch files the model will read in Step 2.5 ---
 # /tmp/slacklens-inference-batch-<n>.json contains:
@@ -725,7 +772,10 @@ is pure inference done in-session.
 
 1. Read `/tmp/slacklens-inference-batch-<n>.json`. It contains `me_id`,
    `me_name`, `vips` (priority contacts), and `threads` (array of
-   `{thread_key, channel, messages}`).
+   `{thread_key, channel, messages}`). A `thread_key` prefixed with
+   `search:` is a standalone bucket mention (a single message with no
+   cached thread reply-chain) — infer it the same way, treating the
+   one message as the entire conversation.
 2. For each element in `threads` (in order), produce one object:
 
    ```json
@@ -867,10 +917,46 @@ for idx, (batch_path, keys) in enumerate(batches):
               + str(type(arr).__name__) + "/"
               + (str(len(arr)) if isinstance(arr, list) else "?"))
         continue
+    # Build orphan-result lookup once per batch (permalink → result dict).
+    orphan_by_perm = {}
+    for bucket_key in ("mentions", "dms", "channels"):
+        for q in sr.get(bucket_key) or []:
+            for r in q.get("results") or []:
+                p = r.get("permalink")
+                if p:
+                    orphan_by_perm[p] = r
+
     for k, elem in zip(keys, arr):
         if not _valid_elem(elem):
             inference_failures += 1
             continue
+        actions = list(elem["actions"])
+        status  = elem["status"]
+        soft_noop = (len(actions) == 1
+                     and actions[0].strip().lower().startswith("nothing"))
+        needs_action = (len(actions) > 0
+                        and status not in ("DONE", "FYI")
+                        and not soft_noop)
+
+        if k.startswith("search:"):
+            # Orphan bucket mention — attach inference to the result dict.
+            perm = k[len("search:"):]
+            r = orphan_by_perm.get(perm)
+            if r is None:
+                continue
+            try:
+                newest = float(r.get("message_ts") or 0)
+            except (TypeError, ValueError):
+                newest = 0.0
+            r["inference"] = {
+                "actions":         actions,
+                "status":          status,
+                "needs_action":    needs_action,
+                "inferred_at":     now_iso,
+                "inferred_for_ts": repr(newest),
+            }
+            continue
+
         t = threads_new.get(k)
         if not t:
             continue
@@ -880,15 +966,6 @@ for idx, (batch_path, keys) in enumerate(batches):
                          default=0.0)
         except Exception:
             newest = 0.0
-        actions = list(elem["actions"])
-        status  = elem["status"]
-        # needs_action: has actions AND not a resolved state AND not a
-        # "Nothing needed" soft-ack.
-        soft_noop = (len(actions) == 1
-                     and actions[0].strip().lower().startswith("nothing"))
-        needs_action = (len(actions) > 0
-                        and status not in ("DONE", "FYI")
-                        and not soft_noop)
         t["inference"] = {
             "actions":         actions,
             "status":          status,
