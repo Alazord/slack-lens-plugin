@@ -1,6 +1,6 @@
 {
   "name": "slacklens",
-  "version": "0.12.7",
+  "version": "0.12.8",
   "description": "Personal Slack triage dashboard for Claude Code. Semantic task inference: each thread card shows a one-line \"what to do\" derived by Claude from the whole thread (Hinglish supported) instead of raw Slack messages. Four-tier priority scoring — a priority contact's direct message outranks a fresh casual ping. Cache schema v3 with per-thread inference cached by last-message-ts. Pinned search limits, permalink dedupe, atomic cache writes with backup + suspicious-refresh guard. DELTA refresh. Stale-cache warnings. Token-cost instrumentation in the refresh log.",
   "author": {
     "name": "Shailendra Singh"

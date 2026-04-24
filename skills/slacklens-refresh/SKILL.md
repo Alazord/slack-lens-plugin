@@ -806,25 +806,48 @@ is pure inference done in-session.
   (`"Fix X and also Y and Z"`), >6 items (batch by theme if there
   really are that many). Empty list OR `["Nothing needed"]` when the
   thread is fully resolved.
-- **Task vs Response vs Discussion — distinguish cleanly:**
-  - *Assigned task*: user has concrete work (fix a bug, review a PR,
-    ship a feature by a date). Read like a todo item.
-  - *Response needed*: someone is asking user's opinion, confirmation,
-    or decision — no specific work, just a reply. Read as
-    `"Reply to X with..."` or `"Confirm Z with X"`.
-  - *Discussion*: general thread, nobody specifically asking user yet.
-    Use status `DISCUSSION`; actions empty or one `"Follow the thread on X"`.
-  - *Delegated / tracking*: user already delegated. Status
-    `WAITING_ON_THEM`; actions like `"Track <Y> from X"`.
-- **`status`** — exactly one of `"AWAITING_REPLY"`, `"WAITING_ON_THEM"`,
-  `"DONE"`, `"DISCUSSION"`, `"FYI"`.
-  - `AWAITING_REPLY` — user owes a substantive reply OR has assigned
-    work outstanding. A one-word ack like "ok" or "noted" does NOT
-    count as substantive.
-  - `WAITING_ON_THEM` — user asked / delegated, blocked on someone else.
-  - `DONE` — resolved.
-  - `DISCUSSION` — general chat, user not specifically addressed.
-  - `FYI` — user passively mentioned / CC'd, no action implied.
+- **`status`** — exactly one of `"AWAITING_REPLY"`, `"BACKLOG"`,
+  `"IN_PROGRESS"`, `"WAITING_ON_THEM"`, `"DONE"`, `"DISCUSSION"`, `"FYI"`.
+  Choose the one that best matches what's owed by whom. Distribution
+  matters: if every thread comes back `AWAITING_REPLY`, the dashboard
+  turns into one giant "Needs reply" bucket and the user can't prioritize.
+  - `AWAITING_REPLY` — user owes a **substantive verbal reply**
+    (opinion, confirmation, decision, answer to a direct question). NOT
+    for assigned work that happens to need acknowledgement. A one-word
+    ack like "ok" or "noted" does NOT count as substantive.
+    Example: "What's the ETA for ingest migration?" → AWAITING_REPLY.
+  - `BACKLOG` — user has been **assigned concrete work** they haven't
+    started yet. Bug to fix, PR to review, feature to ship, module to
+    audit. Last message is the ask, user hasn't replied with progress
+    or a commitment. Example: "Please review the AI Agents module." →
+    BACKLOG.
+  - `IN_PROGRESS` — user is **actively working** on the thread's ask.
+    Signals: user's latest message is an update, a question back to
+    the asker, a "working on it / looking / on call", or a partial
+    delivery. Thread is live with the user engaged. Example: user
+    replied "I'm on the call, will debug now" → IN_PROGRESS.
+  - `WAITING_ON_THEM` — user already replied / delegated / asked, now
+    blocked on someone else's action. Ball in the other person's court.
+    Example: "PR raised, waiting on Hatim to approve." → WAITING_ON_THEM.
+  - `DISCUSSION` — general thread, nobody specifically asking user yet.
+    Actions empty or one `"Follow the thread on X"`.
+  - `FYI` — user passively mentioned / CC'd / informed, no action
+    implied. Thank-yous, status broadcasts, cc-only pings.
+  - `DONE` — resolved. User's work (or the thread) is complete.
+- **Choosing BACKLOG vs AWAITING_REPLY (the common confusion):**
+  User being asked for *words* → `AWAITING_REPLY`. User being asked
+  for *work* → `BACKLOG`. "What do you think?" = reply. "Please fix
+  this" = backlog. When the action list reads like a todo, status is
+  usually BACKLOG or IN_PROGRESS, not AWAITING_REPLY.
+- Messages may mix English and Hinglish (Hindi in Latin script). Treat
+  both as equivalent when extracting intent. Example: `"bhai kal wala
+  PR review kar diya kya?"` = "did you review yesterday's PR?".
+- Flag priority contacts in `actions` wording when relevant ("Reply to
+  Alice VIP...") — helps the user scan the dashboard.
+- Output an array whose length EXACTLY equals `len(threads)` in input
+  order. If you can't infer a thread, still emit a placeholder:
+  `{"actions": [], "status": "DISCUSSION"}` — the Python merge in Step
+  2.6 validates and drops bad entries.
 - Messages may mix English and Hinglish (Hindi in Latin script). Treat
   both as equivalent when extracting intent. Example: `"bhai kal wala
   PR review kar diya kya?"` = "did you review yesterday's PR?".
@@ -876,7 +899,8 @@ restored_from_backup = bool(staged.get("restored_from_backup") or False)
 inference_run_count  = int(staged.get("inference_run_count") or 0)
 inference_hit_count  = int(staged.get("inference_hit_count") or 0)
 
-VALID_STATUSES = {"AWAITING_REPLY", "WAITING_ON_THEM", "DONE", "DISCUSSION", "FYI"}
+VALID_STATUSES = {"AWAITING_REPLY", "BACKLOG", "IN_PROGRESS",
+                  "WAITING_ON_THEM", "DONE", "DISCUSSION", "FYI"}
 
 def _valid_elem(elem):
     # v0.12.6: limits loosened — up to 6 actions, ≤160 chars each.
