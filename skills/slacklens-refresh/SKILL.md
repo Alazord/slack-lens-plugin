@@ -741,19 +741,37 @@ is pure inference done in-session.
 
 ### Inference rules
 
-- **`actions`** — 0–3 short imperatives (each ≤80 chars) phrased TO the
-  user. Good: `"Reply to Alice about the ingest-bug ETA"`,
-  `"Confirm 3pm call with Eve on release plan"`, `"Review PR #412"`,
-  `"Nothing needed — already handled"`. Bad: narration
-  (`"User was asked a question"`), Slack-copy (`"<@U0ME> please review"`),
-  or >3 items. Empty list OR `["Nothing needed"]` when the thread is
-  fully resolved.
+- **`actions`** — 0–6 concrete todo items (each ≤160 chars) phrased TO
+  the user. Each action is one line-item the user would cross off a
+  list. When a thread carries multiple asks, list each one separately
+  instead of merging them into a single combined string.
+  - Concrete task: `"Fix cursor alignment in Arabic copilot input"`
+  - Concrete task: `"Verify Sirion Dev 7 fix on prod"`
+  - Response needed: `"Reply to Alice with ETA on ingest migration"`
+  - Call / meeting: `"Join 3pm call with Eve on release plan"`
+  - Soft follow-up: `"Track Ishu + Muaz sync on markdown bugs"`
+  - No-op resolution: `"Nothing needed — already handled"`
+  Bad: narration (`"User was asked a question"`), Slack-copy
+  (`"<@U0ME> please review"`), combined items
+  (`"Fix X and also Y and Z"`), >6 items (batch by theme if there
+  really are that many). Empty list OR `["Nothing needed"]` when the
+  thread is fully resolved.
+- **Task vs Response vs Discussion — distinguish cleanly:**
+  - *Assigned task*: user has concrete work (fix a bug, review a PR,
+    ship a feature by a date). Read like a todo item.
+  - *Response needed*: someone is asking user's opinion, confirmation,
+    or decision — no specific work, just a reply. Read as
+    `"Reply to X with..."` or `"Confirm Z with X"`.
+  - *Discussion*: general thread, nobody specifically asking user yet.
+    Use status `DISCUSSION`; actions empty or one `"Follow the thread on X"`.
+  - *Delegated / tracking*: user already delegated. Status
+    `WAITING_ON_THEM`; actions like `"Track <Y> from X"`.
 - **`status`** — exactly one of `"AWAITING_REPLY"`, `"WAITING_ON_THEM"`,
   `"DONE"`, `"DISCUSSION"`, `"FYI"`.
-  - `AWAITING_REPLY` — someone asked the user something and the user
-    hasn't substantively answered. A one-word ack like "ok" or "noted"
-    does NOT count as answering a real ask — flag as AWAITING_REPLY.
-  - `WAITING_ON_THEM` — the user asked, is blocked on someone else.
+  - `AWAITING_REPLY` — user owes a substantive reply OR has assigned
+    work outstanding. A one-word ack like "ok" or "noted" does NOT
+    count as substantive.
+  - `WAITING_ON_THEM` — user asked / delegated, blocked on someone else.
   - `DONE` — resolved.
   - `DISCUSSION` — general chat, user not specifically addressed.
   - `FYI` — user passively mentioned / CC'd, no action implied.
@@ -811,12 +829,16 @@ inference_hit_count  = int(staged.get("inference_hit_count") or 0)
 VALID_STATUSES = {"AWAITING_REPLY", "WAITING_ON_THEM", "DONE", "DISCUSSION", "FYI"}
 
 def _valid_elem(elem):
+    # v0.12.6: limits loosened — up to 6 actions, ≤160 chars each.
+    # The earlier 3×80 cap dropped legit multi-ask inferences (e.g. a
+    # bug thread listing 4 concrete fixes) that the user wants to see
+    # itemized in the card's numbered-list render.
     if not isinstance(elem, dict):
         return False
     acts = elem.get("actions")
-    if not isinstance(acts, list) or len(acts) > 3:
+    if not isinstance(acts, list) or len(acts) > 6:
         return False
-    if not all(isinstance(a, str) and len(a) <= 80 for a in acts):
+    if not all(isinstance(a, str) and len(a) <= 160 for a in acts):
         return False
     if elem.get("status") not in VALID_STATUSES:
         return False

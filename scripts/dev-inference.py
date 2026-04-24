@@ -94,13 +94,13 @@ def validate(arr, expected_keys):
         if not isinstance(actions, list):
             errors.append(f"[{i}] actions not a list")
         else:
-            if len(actions) > 3:
-                errors.append(f"[{i}] actions length {len(actions)} > 3")
+            if len(actions) > 6:
+                errors.append(f"[{i}] actions length {len(actions)} > 6")
             for j, a in enumerate(actions):
                 if not isinstance(a, str):
                     errors.append(f"[{i}].actions[{j}] not a string")
-                elif len(a) > 80:
-                    errors.append(f"[{i}].actions[{j}] > 80 chars ({len(a)})")
+                elif len(a) > 160:
+                    errors.append(f"[{i}].actions[{j}] > 160 chars ({len(a)})")
         if status not in VALID_STATUSES:
             errors.append(f"[{i}] status '{status}' not in {sorted(VALID_STATUSES)}")
     return errors

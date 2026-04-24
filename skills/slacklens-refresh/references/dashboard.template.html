@@ -402,16 +402,34 @@ body {
   line-height: 1.4;
   margin-top: 2px;
   overflow: hidden;
-  /* Two-line clamp — inference summaries often don't fit in one line
-     but are rarely longer than two. -webkit-box with line-clamp works
-     across evergreen browsers; the hidden overflow + visibility:hidden
-     pseudo-fallback covers engines that ignore -webkit-line-clamp. */
+  white-space: normal;
+  word-break: break-word;
+}
+/* Raw-preview cards (pre-v3 cache / inference failure) clamp to two
+   lines — that's Slack text we don't want filling the card. Inference
+   cards use their natural height so multi-action lists render in full. */
+.sl-item-msg[data-source="raw"] {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
-  white-space: normal;
-  word-break: break-word;
+}
+/* Single-action inference cards — same two-line clamp for visual
+   parity with raw-preview. Multi-action lists render in full. */
+.sl-item-msg[data-source="inference"]:not(:has(ol)) {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.sl-item-actions {
+  margin: 2px 0 0;
+  padding-left: 20px;
+  font-weight: 500;
+}
+.sl-item-actions li {
+  margin: 2px 0;
+  line-height: 1.4;
 }
 .sl-item-thread {
   font-family: var(--font-sans);
@@ -1810,13 +1828,22 @@ function renderItem(it) {
   msg.className = 'sl-item-msg';
   const actions = it.inference_actions;
   if (Array.isArray(actions) && actions.length > 0) {
-    msg.textContent = actions[0];
     msg.dataset.source = 'inference';
-    if (actions.length > 1) {
-      const more = document.createElement('span');
-      more.className = 'sl-item-msg-more';
-      more.textContent = ` · +${actions.length - 1} more`;
-      msg.appendChild(more);
+    if (actions.length === 1) {
+      // One action — inline plain text, no bullet
+      msg.textContent = actions[0];
+    } else {
+      // Multi-action — numbered list, full height, no clip. These are
+      // usually assigned tasks a user wants to see in full; clipping
+      // to one line buries the substance.
+      const ol = document.createElement('ol');
+      ol.className = 'sl-item-actions';
+      for (const a of actions) {
+        const li = document.createElement('li');
+        li.textContent = a;
+        ol.appendChild(li);
+      }
+      msg.appendChild(ol);
     }
   } else if (Array.isArray(actions) && actions.length === 0) {
     // Inference ran, concluded nothing for the user to do
