@@ -412,6 +412,40 @@ body {
   margin-top: 3px;
 }
 
+/* v3 semantic inference — the card's primary line swaps from raw Slack
+   text to an LLM-produced action statement. Style tweaks below make
+   that distinction visible without screaming about it. */
+.sl-item-msg[data-source="inference"] { font-weight: 500; }
+.sl-item-msg[data-source="inference-empty"],
+.sl-item-msg--muted { opacity: 0.55; }
+.sl-item-msg-more { opacity: 0.65; font-size: 0.9em; margin-left: 0.25em; }
+
+/* "What to do" block at top of the side panel — shows all actions
+   (card only shows the first). Subtle accent tint so it reads as
+   derived content, not a message. */
+.sl-panel-actions-block {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent, #4e8cff);
+  background: var(--panel-accent-bg, rgba(78,140,255,0.07));
+  border-radius: 6px;
+}
+.sl-panel-actions-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+  margin-bottom: 6px;
+}
+.sl-panel-actions-list {
+  margin: 0;
+  padding-left: 18px;
+}
+.sl-panel-actions-list li {
+  margin: 3px 0;
+  line-height: 1.4;
+}
+
 /* ========================================================================
    Banner (stale cache, schema mismatch, fetch failed)
    ======================================================================== */
@@ -895,6 +929,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
       <button class="sl-pill" data-status="BACKLOG"     type="button">Backlog <span class="count">0</span></button>
       <button class="sl-pill" data-status="IN PROGRESS" type="button">In progress <span class="count">0</span></button>
       <button class="sl-pill" data-status="WAITING"     type="button">Waiting <span class="count">0</span></button>
+      <button class="sl-pill" data-status="DISCUSSION"  type="button">Discussion <span class="count">0</span></button>
+      <button class="sl-pill" data-status="FYI"         type="button">FYI <span class="count">0</span></button>
       <button class="sl-pill" data-status="DONE"        type="button">Done <span class="count">0</span></button>
     </div>
     <div class="sl-divider"></div>
@@ -985,14 +1021,25 @@ window.__SLACK_CACHE__ = {
 
 // ---------- State ----------
 const LS_KEY = 'slackTriageOverrides.v1';
-const STATUSES = ['AWAITING YOUR REPLY','BACKLOG','IN PROGRESS','WAITING','DISCUSSION','DONE'];
+const STATUSES = ['AWAITING YOUR REPLY','BACKLOG','IN PROGRESS','WAITING','DISCUSSION','FYI','DONE'];
 const STATUS_LABELS = {
   'AWAITING YOUR REPLY': 'Needs reply',
   'BACKLOG': 'Backlog',
   'IN PROGRESS': 'In progress',
   'WAITING': 'Waiting',
   'DISCUSSION': 'Discussion',
+  'FYI': 'FYI',
   'DONE': 'Done',
+};
+// Inference-era (v3 cache) statuses → existing pill enum. Lets the
+// LLM own status inference without breaking pre-v3 caches that still
+// carry the regex-inferred English strings above.
+const STATUS_FROM_INFERENCE = {
+  'AWAITING_REPLY':  'AWAITING YOUR REPLY',
+  'WAITING_ON_THEM': 'WAITING',
+  'DONE':            'DONE',
+  'DISCUSSION':      'DISCUSSION',
+  'FYI':             'FYI',
 };
 const ME_ID = '';
 const ME_NAME = '';
@@ -1044,12 +1091,14 @@ function checkSchemaBanner() {
     showBanner('warn', 'Your cache predates v0.2.0 — run "refresh slacklens" to rebuild.');
     return;
   }
-  // Soft upgrade prompt for v1 caches. Everything still works; the new
-  // fields just aren't pre-computed yet so tier scoring falls back to
-  // regex-deriving from_user_id + mentioned_ids on every render.
+  // Soft upgrade prompt for older caches. Everything still works; the
+  // dashboard degrades gracefully — v2+ tier scoring falls back to
+  // regex-deriving from_user_id + mentioned_ids, and v3 inference
+  // is the only version that skips raw-text previews in favor of
+  // LLM-produced action statements.
   const ver = raw.version || 1;
-  if (ver < 2) {
-    showBanner('info', 'Run "refresh slacklens" to rebuild the cache with v0.9.0 fields (lighter render, better priority-contact detection).');
+  if (ver < 3) {
+    showBanner('info', 'Run "refresh slacklens" to enable semantic task inference — cards will show what you need to do instead of raw Slack messages.');
   }
 }
 
@@ -1141,10 +1190,28 @@ function normalize() {
     // of the timezone suffix on `last_time` ("IST", "PST" etc).
     const lastTs   = last ? (+last.ts || 0) : 0;
 
-    const derived = inferStatus({
-      channel_name: t.channel_name,
-      lastIsMe, lastText, msgs
-    });
+    // v3 cache carries an LLM-produced inference per thread. When present,
+    // it wins over the regex `inferStatus` heuristic — the LLM can read
+    // the whole thread (incl. Hinglish) and decide status on semantic
+    // grounds. Absent inference → fall back to regex (pre-v3 caches).
+    let derived;
+    let inferenceActions = null;
+    const inf = t.inference;
+    if (inf && typeof inf === 'object'
+        && Array.isArray(inf.actions)
+        && STATUS_FROM_INFERENCE[inf.status]) {
+      const mappedStatus = STATUS_FROM_INFERENCE[inf.status];
+      derived = {
+        status: mappedStatus,
+        needs_reply: !!inf.needs_action && mappedStatus === 'AWAITING YOUR REPLY',
+      };
+      inferenceActions = inf.actions;
+    } else {
+      derived = inferStatus({
+        channel_name: t.channel_name,
+        lastIsMe, lastText, msgs
+      });
+    }
 
     // vip_tagged_me: did any VIP send a message in this thread that tags
     // my Slack ID? That's the P0 signal — VIP actively addressing me as
@@ -1205,6 +1272,7 @@ function normalize() {
       stale_ping: stalePing,
       status: derived.status,
       needs_reply: derived.needs_reply,
+      inference_actions: inferenceActions,   // v3: array or null
       source: 'thread',
     });
   });
@@ -1265,6 +1333,7 @@ function normalize() {
       // the "AWAITING YOUR REPLY" default.
       status: lastIsMe ? 'WAITING' : 'AWAITING YOUR REPLY',
       needs_reply: !lastIsMe,
+      inference_actions: null,   // search items have no associated thread inference
       source: 'search',
     });
   }));
@@ -1345,7 +1414,9 @@ function computeScore(it) {
   // recency. User-overridden state (effectiveItem) — the original
   // heuristic-derived status stays, but user overrides win.
   const eff = effectiveItem(it);
-  const penalty = (eff.status === 'DONE' || eff.snoozed) ? -2000 : 0;
+  // DONE and FYI both sink to the bottom — FYI is "passively CC'd, no
+  // action implied" which is attention-wise equivalent to resolved.
+  const penalty = (eff.status === 'DONE' || eff.status === 'FYI' || eff.snoozed) ? -2000 : 0;
   return base + recency + penalty;
 }
 
@@ -1713,7 +1784,26 @@ function renderItem(it) {
 
   const msg = document.createElement('div');
   msg.className = 'sl-item-msg';
-  msg.textContent = formatSlackText(it.last_text);
+  const actions = it.inference_actions;
+  if (Array.isArray(actions) && actions.length > 0) {
+    msg.textContent = actions[0];
+    msg.dataset.source = 'inference';
+    if (actions.length > 1) {
+      const more = document.createElement('span');
+      more.className = 'sl-item-msg-more';
+      more.textContent = ` · +${actions.length - 1} more`;
+      msg.appendChild(more);
+    }
+  } else if (Array.isArray(actions) && actions.length === 0) {
+    // Inference ran, concluded nothing for the user to do
+    msg.textContent = 'No action needed';
+    msg.dataset.source = 'inference-empty';
+    msg.classList.add('sl-item-msg--muted');
+  } else {
+    // Pre-v3 cache OR inference failed — fall back to raw preview
+    msg.textContent = formatSlackText(it.last_text);
+    msg.dataset.source = 'raw';
+  }
   body.appendChild(msg);
 
   if (it.msg_count > 1 && it.participants && it.participants.length > 1) {
@@ -2101,6 +2191,28 @@ function openPanel(itemKey, triggerEl) {
   // Render the thread messages
   const threadEl = document.getElementById('panelThread');
   threadEl.innerHTML = '';
+
+  // v3: "What to do" block at the top of the drawer — full actions
+  // list from the inference, not just the first one the card shows.
+  const infActs = it.inference_actions;
+  if (Array.isArray(infActs) && infActs.length > 0) {
+    const box = document.createElement('div');
+    box.className = 'sl-panel-actions-block';
+    const head = document.createElement('div');
+    head.className = 'sl-panel-actions-head';
+    head.textContent = 'What to do';
+    box.appendChild(head);
+    const ul = document.createElement('ul');
+    ul.className = 'sl-panel-actions-list';
+    for (const a of infActs) {
+      const li = document.createElement('li');
+      li.textContent = a;
+      ul.appendChild(li);
+    }
+    box.appendChild(ul);
+    threadEl.appendChild(box);
+  }
+
   for (const m of threadMessagesFor(it)) {
     const wrap = document.createElement('div');
     wrap.className = 'msg' + (isMe(m.from) ? ' me' : '');
