@@ -137,7 +137,7 @@ python3 - <<'PY'
 import json, os
 from datetime import datetime, timezone
 
-SUPPORTED_CACHE_VERSION = 2
+SUPPORTED_CACHE_VERSION = 3
 
 home = os.path.expanduser("~/.slacklens")
 cache_path = os.path.join(home, "cache.json")
@@ -153,18 +153,18 @@ else:
         t = len(data.get("threads") or {})
         total = m + d + c + t
 
-        # Schema version — v0.5+ caches carry a version field. v2 added
-        # structured from_user_id / mentioned_ids / reply_count in v0.9.0
-        # for tier scoring. Old v1 caches still render correctly; the
-        # dashboard derives v2 fields lazily. Prompt for refresh so the
-        # user gets the lighter render path and accurate VIP detection.
+        # Schema version:
+        #   v1 → v2 added structured from_user_id / mentioned_ids / reply_count.
+        #   v2 → v3 added per-thread `inference` {actions, status, needs_action}.
+        # Each bump is backward-compatible; older caches still render, they
+        # just miss the newer features. Nudge users forward.
         ver = data.get("version")
         if ver is None:
             print(f"⚠ cache schema — no version field (pre-v0.6). Run `refresh slacklens` to upgrade to v{SUPPORTED_CACHE_VERSION}.")
         elif ver > SUPPORTED_CACHE_VERSION:
             print(f"✗ cache schema — v{ver} newer than dashboard supports (v{SUPPORTED_CACHE_VERSION}). Update the plugin.")
         elif ver < SUPPORTED_CACHE_VERSION:
-            print(f"⚠ cache schema — v{ver} older than current v{SUPPORTED_CACHE_VERSION}. Run `refresh slacklens` to pick up v2 fields (structured IDs, mentions, reply counts).")
+            print(f"⚠ cache schema — v{ver} older than current v{SUPPORTED_CACHE_VERSION}. Run `refresh slacklens` to enable semantic task inference (cards show what to do, not raw messages).")
         else:
             print(f"✓ cache schema — v{ver}")
 
@@ -219,6 +219,14 @@ else:
         restored_count = sum(1 for e in entries if e.get("restored_from_backup"))
         repaired_total = sum(int(e.get("results_repaired") or 0) for e in entries)
 
+        # v3 inference rollup — per-refresh counts of threads that went
+        # through Claude, threads that reused a cached inference, and
+        # per-element failures (malformed JSON / schema validation drops).
+        inference_run_total    = sum(int(e.get("inference_run") or 0) for e in entries)
+        inference_hit_total    = sum(int(e.get("inference_hits") or 0) for e in entries)
+        inference_fail_total   = sum(int(e.get("inference_failures") or 0) for e in entries)
+        inference_tokens_total = sum(int(e.get("inference_tokens_est") or 0) for e in entries)
+
         # Token-cost rollup (rough). payload_bytes // 4 is a BPE-lower-bound
         # estimate, logged per refresh. Surface totals + last-24h window so
         # user can see "how expensive is SlackLens per day".
@@ -265,6 +273,19 @@ else:
             print(f"ℹ refresh.log — payload cost: ~{_fmt(tokens_total)} tokens "
                   f"across {len(entries)} refresh(es) · ~{_fmt(tokens_24h)} in last 24h "
                   f"(rough, bytes/4 heuristic — doesn't count skill prompts or side-panel)")
+
+        # v3 inference rollup line — only print if we have inference data.
+        # Hit-rate shows how well the cache is working: high hit % means
+        # most refreshes reuse prior inferences and cost almost nothing.
+        if inference_run_total + inference_hit_total > 0:
+            denom = inference_run_total + inference_hit_total
+            hit_pct = (inference_hit_total * 100 // denom) if denom else 0
+            fail_note = ""
+            if inference_fail_total > 0:
+                fail_note = f" · {inference_fail_total} failure(s) — check last refresh output"
+            print(f"ℹ refresh.log — inference: {inference_run_total} ran · "
+                  f"{inference_hit_total} cache hits ({hit_pct}%) · "
+                  f"~{_fmt(inference_tokens_total)} tokens{fail_note}")
 PY
 ```
 
@@ -417,7 +438,7 @@ Suppress all prose and ✓/⚠/✗ lines. Emit one JSON object on stdout:
   "runtime":   {"slack_mcp": "ok", "scheduled_tasks": "ok", "cowork": "missing"},
   "plugin":    {"config": "ok", "dashboard": "ok", "allowlist_missing": 0},
   "cache":     {"version": 1, "age_hours": 2.3, "mentions": 4, "dms": 1, "channels": 0, "threads": 3},
-  "refresh_log": {"entries": 12, "failures": 0, "suspicious": 0, "restored_from_backup": 0, "results_repaired": 0, "tokens_total": 12345, "tokens_24h": 3210, "last_outcome": "ok"},
+  "refresh_log": {"entries": 12, "failures": 0, "suspicious": 0, "restored_from_backup": 0, "results_repaired": 0, "tokens_total": 12345, "tokens_24h": 3210, "last_outcome": "ok", "inference": {"run": 45, "hits": 120, "failures": 0, "tokens_total": 67890}},
   "scheduled": {"registered": false, "cron": null},
   "next_step": "nothing to do — SlackLens is healthy."
 }
