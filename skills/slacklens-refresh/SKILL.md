@@ -444,6 +444,122 @@ if len(keep_threads) != len(threads_new):
     print("purged " + str(len(threads_new) - len(keep_threads)) + " threads older than 48h")
 threads_new = keep_threads
 
+# --- DM / Group-DM conversation synthesis (v0.12.1) ---
+# Slack DMs and group DMs are continuous conversations, not reply-threads.
+# Each message carries its own `thread_ts == message_ts`, so naive cache
+# shapes end up with N standalone items for one back-and-forth session.
+# Fold all messages from the same DM channel into ONE synthetic thread
+# keyed `<channel_id>:convo` so inference sees the whole context and the
+# dashboard renders one card per DM conversation.
+#
+# Scope: 1:1 DMs (channel_id starts with "D") and group DMs (channel_name
+# starts with "Group DM" / "DM (" / "DM with") regardless of ID prefix —
+# some workspaces return C-prefixed IDs for MPIMs. Public/private channels
+# keep per-thread behavior untouched.
+def _is_dm_channel(channel_id, channel_name):
+    if (channel_id or "").startswith("D"):
+        return True
+    n = (channel_name or "").lower()
+    return (n.startswith("group dm")
+            or n.startswith("dm (")
+            or n.startswith("dm with"))
+
+# Walk buckets, collect DM messages keyed by channel_id; also collect an
+# ordered list of bucket-query indexes so we can delete the consumed
+# results afterwards (we don't want them re-rendering as standalone cards).
+dm_messages_by_channel = {}   # channel_id → {"channel_name": str, "msgs": [msg], "seen_links": set}
+bucket_consumed = {"mentions": [], "dms": [], "channels": []}  # list of (qi, ri) to drop
+
+for bucket_key in ("mentions", "dms", "channels"):
+    for qi, q in enumerate(sr.get(bucket_key) or []):
+        for ri, r in enumerate(q.get("results") or []):
+            cid  = r.get("channel_id") or ""
+            cname = r.get("channel_name") or ""
+            if not _is_dm_channel(cid, cname):
+                continue
+            entry = dm_messages_by_channel.setdefault(cid, {
+                "channel_name": cname,
+                "msgs":         [],
+                "seen_links":   set(),
+            })
+            # Dedupe across buckets by permalink (falls back to ts)
+            link = r.get("permalink") or (cid + ":" + (r.get("message_ts") or ""))
+            if link in entry["seen_links"]:
+                bucket_consumed[bucket_key].append((qi, ri))
+                continue
+            entry["seen_links"].add(link)
+            entry["msgs"].append({
+                "from":          r.get("from_user") or "",
+                "from_user_id":  r.get("from_user_id") or "",
+                "ts":            r.get("message_ts") or "0",
+                "mentioned_ids": r.get("mentioned_ids") or [],
+                "time":          r.get("time") or "",
+                "text":          r.get("text") or "",
+                "permalink":     r.get("permalink") or "",
+            })
+            bucket_consumed[bucket_key].append((qi, ri))
+
+# Fold any existing thread entries for these DM channels into the convo
+# (both the thread parent and any replies fetched via slack_read_thread).
+# After folding, drop the individual thread-keyed entry.
+folded_thread_keys = []
+for tkey, t in list(threads_new.items()):
+    cid = t.get("channel_id") or ""
+    cname = t.get("channel_name") or ""
+    if not _is_dm_channel(cid, cname):
+        continue
+    entry = dm_messages_by_channel.setdefault(cid, {
+        "channel_name": cname,
+        "msgs":         [],
+        "seen_links":   set(),
+    })
+    for m in t.get("messages") or []:
+        link = m.get("permalink") or (cid + ":" + (m.get("ts") or ""))
+        if link in entry["seen_links"]:
+            continue
+        entry["seen_links"].add(link)
+        entry["msgs"].append(m)
+    folded_thread_keys.append(tkey)
+
+for tk in folded_thread_keys:
+    threads_new.pop(tk, None)
+
+# Synthesize one thread per DM channel
+synthesized = 0
+for cid, entry in dm_messages_by_channel.items():
+    if not entry["msgs"]:
+        continue
+    # Sort chronologically so inference reads the back-and-forth in order.
+    entry["msgs"].sort(key=lambda m: float(m.get("ts") or 0))
+    synth_key = cid + ":convo"
+    threads_new[synth_key] = {
+        "channel_id":   cid,
+        "channel_name": entry["channel_name"],
+        "thread_ts":    "convo",   # sentinel — NOT a real Slack thread_ts
+        "reply_count":  max(0, len(entry["msgs"]) - 1),
+        "messages":     entry["msgs"],
+    }
+    synthesized += 1
+
+# Drop consumed bucket results so the dashboard's search-bucket iteration
+# doesn't re-render them as standalone cards alongside the convo thread.
+# Delete in reverse index order within each query so ri stays valid.
+for bucket_key, pairs in bucket_consumed.items():
+    # Group by qi, then sort ri desc, then del
+    by_q = {}
+    for (qi, ri) in pairs:
+        by_q.setdefault(qi, []).append(ri)
+    for qi, ris in by_q.items():
+        q = (sr.get(bucket_key) or [])[qi]
+        for ri in sorted(set(ris), reverse=True):
+            if 0 <= ri < len(q.get("results") or []):
+                del q["results"][ri]
+
+if synthesized:
+    print("synthesized " + str(synthesized) + " DM/Group-DM conversation thread(s) "
+          "from " + str(sum(len(p) for p in bucket_consumed.values()))
+          + " search results + " + str(len(folded_thread_keys)) + " folded thread(s)")
+
 # --- Hard cap on threads: defensive ---
 if len(threads_new) > 50:
     keys_sorted = sorted(threads_new, key=thread_newest_ts, reverse=True)
