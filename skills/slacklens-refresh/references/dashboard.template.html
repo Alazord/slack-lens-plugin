@@ -402,8 +402,16 @@ body {
   line-height: 1.4;
   margin-top: 2px;
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  /* Two-line clamp — inference summaries often don't fit in one line
+     but are rarely longer than two. -webkit-box with line-clamp works
+     across evergreen browsers; the hidden overflow + visibility:hidden
+     pseudo-fallback covers engines that ignore -webkit-line-clamp. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  white-space: normal;
+  word-break: break-word;
 }
 .sl-item-thread {
   font-family: var(--font-sans);
