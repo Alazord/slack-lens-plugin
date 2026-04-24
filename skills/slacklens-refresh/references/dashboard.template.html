@@ -279,8 +279,8 @@ body {
   .sl-item-status { display: none; }
 }
 @container channel (max-width: 320px) {
-  /* Collapse secondary primary-actions into the ⋯ menu; keep Slack jump. */
-  .sl-item-go[data-action="replied"],
+  /* Collapse snooze into the ⋯ menu when narrow; keep the Slack jump
+     button (primary CTA) always visible. */
   .sl-item-go[data-action="snooze"] { display: none; }
 }
 .sl-channel-head {
@@ -1849,18 +1849,12 @@ function renderItem(it) {
   const snoozedUntil = eff2.snooze_until ? Date.parse(eff2.snooze_until) : 0;
   if (snoozedUntil && snoozedUntil > Date.now()) row.dataset.snoozed = '1';
 
-  // Action tail: three primary glyphs always visible + overflow menu on click
+  // Action tail: two primary glyphs always visible (snooze + open) +
+  // overflow menu for everything else (replied, done, change status,
+  // copy link). Two-icon tail keeps cards visually quiet; overflow is
+  // one click away and lists every action including the promoted two.
   const tail = document.createElement('div');
   tail.className = 'sl-item-tail';
-
-  const repliedBtn = document.createElement('button');
-  repliedBtn.className = 'sl-item-go';
-  repliedBtn.type = 'button';
-  repliedBtn.dataset.action = 'replied';
-  repliedBtn.title = 'Mark replied (waiting on them)';
-  repliedBtn.setAttribute('aria-label', 'Mark replied');
-  repliedBtn.textContent = '↩';
-  tail.appendChild(repliedBtn);
 
   const snoozeBtn = document.createElement('button');
   snoozeBtn.className = 'sl-item-go';
@@ -2288,8 +2282,9 @@ function handleRowAction(action, it, anchorEl) {
 }
 
 function openMoreMenu(it, anchorEl) {
-  // Replied + Snooze are also listed here because the primary icons for
-  // both get hidden in narrow-card container queries; menu stays complete.
+  // Snooze is also listed here because its primary icon gets hidden in
+  // narrow-card container queries. Replied lives only here — it was
+  // promoted out of the always-visible tail to keep cards visually quiet.
   openMenu(anchorEl, [
     { label: '↩ Mark replied',     onClick: () => { overrideFor(it.key).status = 'WAITING'; saveOverrides(); render(); } },
     { label: '☾ Snooze…',          onClick: () => openSnoozeMenu(it, anchorEl) },
