@@ -362,7 +362,9 @@ body {
   font-family: var(--font-sans);
   font-weight: 500;
   font-size: var(--fs-sm);
-  color: var(--ink);
+  /* ink-muted (not full ink) so the sender label recedes — the task
+     line is the primary read; from-name is supporting context. */
+  color: var(--ink-muted);
 }
 .sl-item-time {
   font-family: var(--font-mono);
@@ -415,10 +417,18 @@ body {
   background: color-mix(in srgb, var(--status-green) 12%, transparent);
 }
 .sl-item-msg {
-  font-family: var(--font-serif);
-  font-size: var(--fs-base);
+  /* Sans (system) for the task body — productivity-tool convention.
+     Serif here read literary against the rest of the sans UI; family
+     swap created visual noise without contributing to the hierarchy.
+     Keep emphasis via size + weight + color (set per data-source). */
+  font-family: var(--font-sans);
+  /* fs-md (one notch up from fs-base) — message body is the primary
+     read in a row; sizing it above the metadata row makes the task
+     the visual anchor instead of the sender/timestamp strip. */
+  font-size: var(--fs-md);
   color: var(--ink-muted);
-  line-height: 1.4;
+  line-height: 1.45;
+  letter-spacing: -0.005em;
   margin-top: 2px;
   overflow: hidden;
   white-space: normal;
@@ -448,7 +458,7 @@ body {
 }
 .sl-item-actions li {
   margin: 2px 0;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 .sl-item-thread {
   font-family: var(--font-sans);
@@ -458,9 +468,17 @@ body {
 }
 
 /* v3 semantic inference — the card's primary line swaps from raw Slack
-   text to an LLM-produced action statement. Style tweaks below make
-   that distinction visible without screaming about it. */
-.sl-item-msg[data-source="inference"] { font-weight: 500; }
+   text to an LLM-produced action statement. Inference text is what the
+   user actually needs to read; bump it to full ink + weight 600 so it
+   wins against the muted sender/timestamp/channel-head row. Raw-source
+   fallbacks stay ink-muted (preview, not a confirmed task). */
+.sl-item-msg[data-source="inference"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+/* Multi-action lists inherit the parent's color/weight; explicit rule
+   here so future readers see "yes, the <ol> items are also primary". */
+.sl-item-actions li { color: var(--ink); font-weight: 600; }
 .sl-item-msg[data-source="inference-empty"],
 .sl-item-msg--muted { opacity: 0.55; }
 .sl-item-msg-more { opacity: 0.65; font-size: 0.9em; margin-left: 0.25em; }
@@ -650,8 +668,13 @@ body {
 .sl-pill.active {
   background: var(--surface-2);
   color: var(--ink);
-  box-shadow: 0 1px 2px rgba(42, 40, 34, 0.08), 0 0 0 1px var(--border);
-  font-weight: 600;
+  /* inset ring keeps the visible pill size identical at rest vs active —
+     a non-inset 0 0 0 1px shadow grows the pill by 2px each side.
+     Drop-shadow stays non-inset so the active pill still lifts off bg. */
+  box-shadow: 0 1px 2px rgba(42, 40, 34, 0.08), inset 0 0 0 1px var(--border);
+  /* font-weight intentionally unchanged — bolding on activate reflows the
+     segmented group (wider glyphs push siblings). Contrast comes from
+     bg + ring + color + ::before dot opacity bump. */
 }
 .sl-pill.active .count { color: var(--ink-muted); }
 
@@ -718,8 +741,8 @@ body {
 .sl-density-btn.active {
   background: var(--surface-2);
   color: var(--ink);
-  box-shadow: 0 1px 2px rgba(42, 40, 34, 0.08), 0 0 0 1px var(--border);
-  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(42, 40, 34, 0.08), inset 0 0 0 1px var(--border);
+  /* same rationale as .sl-pill.active — avoid width reflow + outer-ring grow. */
 }
 
 .sl-toolbar-right {
