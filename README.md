@@ -65,9 +65,13 @@ Messages mixing English and Hinglish (Hindi in Latin script) are handled nativel
 
 Inferences are cached per-thread and only re-run when a new message arrives, so the incremental cost of a typical refresh is a few thousand tokens. The side panel's "What to do" block shows the full list of inferred actions (the card only renders the first).
 
+## Everything is Slack-driven (read-only dashboard)
+
+The dashboard is **read-only** — it stores nothing of its own. Your task list is derived entirely from Slack each refresh. You **manage tasks in Slack**: reply, resolve, or close the thread. On the next refresh, Claude re-reads the thread, and when it concludes there's nothing left to do, the card **auto-closes** into a collapsed **"Done (derived)"** section so you can verify what closed. A thread with no inference yet shows a neutral _"Unread by triage"_ status rather than a fake "needs reply". Each card's actions are just **↗ Open in Slack** and **⎘ Copy permalink**.
+
 ## How items are ranked
 
-Items are scored by **tier + recency + your overrides**. Tier always dominates recency — a priority contact's 5-hour-old DM sits above a teammate's 30-second-old channel ping. Items you mark DONE / FYI or snooze sink below everything.
+Items are scored by **tier + recency**. Tier always dominates recency — a priority contact's 5-hour-old DM sits above a teammate's 30-second-old channel ping. Done / FYI items sink below everything and move to the Done (derived) section.
 
 Full tier table and edge-case rules: [docs/PRIORITY.md](docs/PRIORITY.md).
 
