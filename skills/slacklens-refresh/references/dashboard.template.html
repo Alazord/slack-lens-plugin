@@ -559,6 +559,25 @@ body {
   cursor: pointer;
 }
 
+/* Done (derived) — collapsed, low-emphasis section below the columns. */
+.sl-done { margin: 16px 0 0; }
+.sl-done-head {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+  padding: 8px 0;
+}
+.sl-done-head .count {
+  margin-left: 6px;
+  opacity: 0.7;
+}
+.sl-done-inner { opacity: 0.7; }
+
 /* ========================================================================
    Topbar
    ======================================================================== */
@@ -1040,6 +1059,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
     </div>
   </main>
 
+  <!-- Done (derived): tasks the inference concluded are finished. Collapsed
+       by default; recent-only (drops out when the thread ages past 48h). -->
+  <section id="doneSection" class="sl-done" aria-label="Done (derived)" hidden>
+    <button id="doneToggle" class="sl-done-head" type="button" aria-expanded="false">
+      Done (derived) <span id="doneCount" class="count">0</span>
+    </button>
+    <div id="doneInner" class="sl-done-inner" hidden></div>
+  </section>
+
   <!-- Empty state container (shown when nothing renders) -->
   <div id="emptyState" class="sl-empty" hidden></div>
 
@@ -1091,7 +1119,7 @@ window.__SLACK_CACHE__ = {
 
 // ---------- State ----------
 const LS_KEY = 'slackTriageOverrides.v1';
-const STATUSES = ['AWAITING YOUR REPLY','BACKLOG','IN PROGRESS','WAITING','DISCUSSION','FYI','DONE'];
+const STATUSES = ['AWAITING YOUR REPLY','BACKLOG','IN PROGRESS','WAITING','DISCUSSION','FYI','DONE','UNKNOWN'];
 const STATUS_LABELS = {
   'AWAITING YOUR REPLY': 'Needs reply',
   'BACKLOG': 'Backlog',
@@ -1100,6 +1128,7 @@ const STATUS_LABELS = {
   'DISCUSSION': 'Discussion',
   'FYI': 'FYI',
   'DONE': 'Done',
+  'UNKNOWN': 'Unread by triage',
 };
 // Inference-era (v3 cache) statuses → existing pill enum. Lets the
 // LLM own status inference without breaking pre-v3 caches that still
@@ -1290,10 +1319,10 @@ function normalize() {
       };
       inferenceActions = inf.actions;
     } else {
-      derived = inferStatus({
-        channel_name: t.channel_name,
-        lastIsMe, lastText, msgs
-      });
+      // No LLM inference for this thread (pre-v3 cache or skipped). Do NOT
+      // fabricate a needs-reply with the regex heuristic — that floods the
+      // board with false tasks (B10). Mark neutral; a refresh will infer it.
+      derived = { status: 'UNKNOWN', needs_reply: false };
     }
 
     // vip_tagged_me: did any VIP send a message in this thread that tags
@@ -1741,6 +1770,42 @@ function partitionByChannel(flatItems) {
   return { vip, left, right, total: all.length };
 }
 
+// Map an item's status into a coarse tracker group.
+//   open    — AWAITING YOUR REPLY / BACKLOG / IN PROGRESS (ball in my court)
+//   waiting — WAITING (blocked on someone else)
+//   ambient — DISCUSSION (no explicit task)
+//   closed  — DONE / FYI / inference concluded no action → Done(derived)
+//   unknown — no inference yet (neutral; not a fake task)
+function statusGroup(it) {
+  const noAction = Array.isArray(it.inference_actions) && it.inference_actions.length === 0;
+  const s = (it.status || 'UNKNOWN').toUpperCase();
+  if (s === 'DONE' || s === 'FYI' || noAction) return 'closed';
+  if (s === 'UNKNOWN')                         return 'unknown';
+  if (s === 'WAITING')                         return 'waiting';
+  if (s === 'DISCUSSION')                      return 'ambient';
+  return 'open';
+}
+
+function groupItems(allItems) {
+  const g = { open: [], waiting: [], ambient: [], closed: [], unknown: [] };
+  for (const it of allItems) g[statusGroup(it)].push(it);
+  return g;
+}
+
+function renderDoneSection(closedItems) {
+  const sec   = document.getElementById('doneSection');
+  const inner = document.getElementById('doneInner');
+  const count = document.getElementById('doneCount');
+  if (!sec || !inner) return;
+  inner.innerHTML = '';
+  const doneParts = partitionByChannel(closedItems);
+  for (const ch of [...doneParts.vip, ...doneParts.left, ...doneParts.right]) {
+    inner.appendChild(renderChannel(ch, 'done'));
+  }
+  if (count) count.textContent = closedItems.length;
+  sec.hidden = closedItems.length === 0;
+}
+
 function render() {
   const vipBand   = document.getElementById('vipBand');
   const vipInner  = document.getElementById('vipBandInner');
@@ -1753,7 +1818,13 @@ function render() {
   rightCol.innerHTML = '';
 
   const shown = applyFilter(items);
-  const parts = partitionByChannel(shown);
+  // Closed (DONE/FYI/no-action) items drop into the Done(derived) section;
+  // everything else fills the main columns. Done renders here, before the
+  // active-column empty-state early-returns, so "all done" still shows it.
+  const grouped = groupItems(shown);
+  const active = [...grouped.open, ...grouped.waiting, ...grouped.unknown, ...grouped.ambient];
+  const parts = partitionByChannel(active);
+  renderDoneSection(grouped.closed);
 
   // Four empty-state paths — the differentiation matters for UX, so keep
   // each branch distinct. "Never refreshed" and "refreshed but silent"
@@ -1775,7 +1846,7 @@ function render() {
     (Array.isArray(filter.status) && filter.status.length > 0) ||
     (filter.query || '').trim() !== '';
 
-  if (parts.total === 0 && activelyFiltered) {
+  if (shown.length === 0 && activelyFiltered) {
     empty.hidden = false;
     empty.innerHTML =
       '<h4>Nothing matches</h4>' +
@@ -1797,7 +1868,7 @@ function render() {
     return;
   }
 
-  if (parts.total === 0) {
+  if (shown.length === 0) {
     // Genuine quiet period — cache is fresh, Slack just returned nothing.
     // Show when we last checked so the user can tell this apart from
     // "maybe refresh is broken?".
@@ -2090,6 +2161,12 @@ function bootFilters() {
   // Show snoozed
   const snz = document.getElementById('showSnoozed');
   if (snz) snz.addEventListener('change', () => { filter.showSnoozed = snz.checked; render(); });
+  // Done(derived) collapse toggle
+  const dt = document.getElementById('doneToggle');
+  const di = document.getElementById('doneInner');
+  if (dt && di) dt.addEventListener('click', () => {
+    const open = di.hidden; di.hidden = !open; dt.setAttribute('aria-expanded', String(open));
+  });
 }
 const STALE_CACHE_HOURS = 12;      // amber: ">12h" — worth refreshing soon
 const VERY_STALE_CACHE_HOURS = 24; // red: ">24h" — data is a day old
