@@ -1820,7 +1820,7 @@ function render() {
   for (const ch of parts.left)  leftCol.appendChild(renderChannel(ch, 'channel'));
   for (const ch of parts.right) rightCol.appendChild(renderChannel(ch, 'dm'));
 
-  updateCounts(shown);
+  updateCounts();
   updateFreshness();
 }
 
@@ -2011,7 +2011,7 @@ function applyFilter(xs) {
 
     // Scope
     if (filter.scope === 'needs_reply'  && !eff.needs_reply)      return false;
-    if (filter.scope === 'mentions'     && it.source !== 'mention') return false;
+    if (filter.scope === 'mentions'     && !it.is_mention)          return false;
     if (filter.scope === 'dms'          && it.kind !== 'dm')      return false;
     if (filter.scope === 'channels'     && it.kind !== 'channel') return false;
 
@@ -2029,18 +2029,24 @@ function applyFilter(xs) {
   });
 }
 
-function updateCounts(shownItems) {
-  const counts = { all: shownItems.length, needs_reply: 0, mentions: 0, dms: 0, channels: 0 };
+// Pure: tally category + status counts over the FULL item set (not the
+// filtered view) so pills always show the true totals.
+function computeCounts(allItems) {
+  const counts = { all: allItems.length, needs_reply: 0, mentions: 0, dms: 0, channels: 0 };
   const statusCounts = { 'BACKLOG': 0, 'IN PROGRESS': 0, 'WAITING': 0, 'DONE': 0, 'DISCUSSION': 0, 'AWAITING YOUR REPLY': 0 };
-  for (const it of shownItems) {
-    const eff = effectiveItem(it);
-    if (eff.needs_reply)            counts.needs_reply++;
-    if (it.source === 'mention')    counts.mentions++;
-    if (it.kind === 'dm')           counts.dms++;
-    if (it.kind === 'channel')      counts.channels++;
-    const s = (eff.status || 'AWAITING YOUR REPLY').toUpperCase();
+  for (const it of allItems) {
+    if (it.needs_reply)         counts.needs_reply++;
+    if (it.is_mention)          counts.mentions++;
+    if (it.kind === 'dm')       counts.dms++;
+    if (it.kind === 'channel')  counts.channels++;
+    const s = (it.status || 'AWAITING YOUR REPLY').toUpperCase();
     if (statusCounts[s] !== undefined) statusCounts[s]++;
   }
+  return { counts, statusCounts };
+}
+
+function updateCounts() {
+  const { counts, statusCounts } = computeCounts(items);
   document.querySelectorAll('#categoryPills .sl-pill').forEach(btn => {
     const k = btn.dataset.scope;
     const c = btn.querySelector('.count');

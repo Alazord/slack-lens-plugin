@@ -22,4 +22,4 @@ __pycache__/
 skills/slacklens-rerender/
 scripts/dev-rebuild.py
 docs/superpowers/
-fixtures/
+/fixtures/
