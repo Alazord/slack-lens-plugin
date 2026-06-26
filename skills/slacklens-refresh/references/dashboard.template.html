@@ -1033,11 +1033,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
         <button class="sl-density-btn active" data-density="balanced" type="button">Balanced</button>
         <button class="sl-density-btn" data-density="spacious" type="button">Spacious</button>
       </div>
-      <label class="sl-switch" id="showSnoozedLabel">
-        <input id="showSnoozed" type="checkbox" />
-        <span class="track"></span>
-        <span class="label">Show snoozed</span>
-      </label>
     </div>
   </nav>
 
@@ -1088,17 +1083,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
       <div><span class="k">Status</span><span id="panelStatus"></span></div>
     </div>
     <div class="sl-panel-actions">
-      <button id="actStatus"  class="sl-btn" type="button">◐ Status ▾</button>
-      <button id="actSnooze"  class="sl-btn" type="button">☾ Snooze ▾</button>
-      <button id="actDone"    class="sl-btn" type="button">✓ Mark done</button>
       <button id="actOpen"    class="sl-btn primary" type="button">↗ Open in Slack</button>
       <button id="actCopy"    class="sl-btn" type="button">⎘ Copy permalink</button>
     </div>
     <div id="panelThread" class="sl-panel-thread"></div>
-    <div class="sl-panel-note">
-      <div class="sl-note-label">Note</div>
-      <textarea id="panelNote" placeholder="Add a private note about this thread (saved locally)"></textarea>
-    </div>
   </aside>
   <div id="panelBackdrop" class="sl-panel-backdrop" hidden></div>
 
@@ -1118,7 +1106,6 @@ window.__SLACK_CACHE__ = {
 // __SLACK_CACHE_END__
 
 // ---------- State ----------
-const LS_KEY = 'slackTriageOverrides.v1';
 const STATUSES = ['AWAITING YOUR REPLY','BACKLOG','IN PROGRESS','WAITING','DISCUSSION','FYI','DONE','UNKNOWN'];
 const STATUS_LABELS = {
   'AWAITING YOUR REPLY': 'Needs reply',
@@ -1149,24 +1136,11 @@ const VIP_NAMES = [];
 
 let raw = null;       // parsed cache JSON
 let items = [];       // normalized list
-let filter = { scope:'all', status:[], query:'', showSnoozed:false };
-let overrides = loadOverrides();
+let filter = { scope:'all', status:[], query:'' };
 // Workspace origin (e.g. 'https://example.slack.com'), derived from the
 // first permalink we see in the cache. Falls back to slack.com so the
 // link-out still resolves to Slack's router for unknown workspaces.
 let WORKSPACE_ORIGIN = 'https://slack.com';
-
-function loadOverrides() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); }
-  catch { return {}; }
-}
-function saveOverrides() {
-  localStorage.setItem(LS_KEY, JSON.stringify(overrides));
-}
-function overrideFor(key) {
-  if (!overrides[key]) overrides[key] = {};
-  return overrides[key];
-}
 
 // ---------- Loading ----------
 function clearBanner() {
@@ -1539,13 +1513,10 @@ function computeScore(it) {
   // P0 (1000+89) still outranks a fresh P1 (500+99).
   const ageH = Math.max(0, (Date.now() / 1000 - (it.last_ts || 0)) / 3600);
   const recency = Math.max(0, 99 - ageH * 2);
-  // DONE / snoozed: sink below every tier so they can't bubble up by
-  // recency. User-overridden state (effectiveItem) — the original
-  // heuristic-derived status stays, but user overrides win.
-  const eff = effectiveItem(it);
-  // DONE and FYI both sink to the bottom — FYI is "passively CC'd, no
-  // action implied" which is attention-wise equivalent to resolved.
-  const penalty = (eff.status === 'DONE' || eff.status === 'FYI' || eff.snoozed) ? -2000 : 0;
+  // DONE and FYI sink below every tier so they can't bubble up by recency —
+  // FYI is "passively CC'd, no action implied", attention-wise equivalent to
+  // resolved. (These items also move to the Done(derived) section.)
+  const penalty = (it.status === 'DONE' || it.status === 'FYI') ? -2000 : 0;
   return base + recency + penalty;
 }
 
@@ -1926,9 +1897,9 @@ function renderItem(it) {
   row.className = 'sl-item';
   // Full status in title so narrow cards (chip hidden via container-query)
   // still surface it on hover.
-  row.title = STATUS_LABELS[(effectiveItem(it).status || 'AWAITING YOUR REPLY').toUpperCase()] || '';
+  row.title = STATUS_LABELS[(it.status || 'AWAITING YOUR REPLY').toUpperCase()] || '';
   row.dataset.key = it.key;
-  row.dataset.status = (effectiveItem(it).status || 'AWAITING YOUR REPLY').toUpperCase();
+  row.dataset.status = (it.status || 'AWAITING YOUR REPLY').toUpperCase();
 
   const bar = document.createElement('div');
   bar.className = 'sl-item-bar';
@@ -2008,26 +1979,10 @@ function renderItem(it) {
   }
   row.appendChild(body);
 
-  // Snoozed visual flag
-  const eff2 = effectiveItem(it);
-  const snoozedUntil = eff2.snooze_until ? Date.parse(eff2.snooze_until) : 0;
-  if (snoozedUntil && snoozedUntil > Date.now()) row.dataset.snoozed = '1';
-
-  // Action tail: two primary glyphs always visible (snooze + open) +
-  // overflow menu for everything else (replied, done, change status,
-  // copy link). Two-icon tail keeps cards visually quiet; overflow is
-  // one click away and lists every action including the promoted two.
+  // Action tail (read-only): jump to Slack + copy permalink. The dashboard
+  // never mutates task state — you close a task by acting in Slack.
   const tail = document.createElement('div');
   tail.className = 'sl-item-tail';
-
-  const snoozeBtn = document.createElement('button');
-  snoozeBtn.className = 'sl-item-go';
-  snoozeBtn.type = 'button';
-  snoozeBtn.dataset.action = 'snooze';
-  snoozeBtn.title = 'Snooze';
-  snoozeBtn.setAttribute('aria-label', 'Snooze');
-  snoozeBtn.textContent = '☾';
-  tail.appendChild(snoozeBtn);
 
   const openBtn = document.createElement('button');
   openBtn.className = 'sl-item-go primary';
@@ -2038,14 +1993,14 @@ function renderItem(it) {
   openBtn.textContent = '↗';
   tail.appendChild(openBtn);
 
-  const moreBtn = document.createElement('button');
-  moreBtn.className = 'sl-item-go';
-  moreBtn.type = 'button';
-  moreBtn.dataset.action = 'more';
-  moreBtn.title = 'More actions';
-  moreBtn.setAttribute('aria-label', 'More actions');
-  moreBtn.textContent = '⋯';
-  tail.appendChild(moreBtn);
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'sl-item-go';
+  copyBtn.type = 'button';
+  copyBtn.dataset.action = 'copy';
+  copyBtn.title = 'Copy permalink';
+  copyBtn.setAttribute('aria-label', 'Copy permalink');
+  copyBtn.textContent = '⎘';
+  tail.appendChild(copyBtn);
 
   row.appendChild(tail);
 
@@ -2054,40 +2009,23 @@ function renderItem(it) {
 
 function applyFilter(xs) {
   const q = (filter.query || '').toLowerCase().trim();
-  const now = Date.now();
   // Migration safety: allow filter.status as string or array
   const statusList = Array.isArray(filter.status)
     ? filter.status
     : (filter.status ? [filter.status] : []);
 
+  // Read-only model: status/needs_reply come straight from the cache
+  // inference. Closed items (DONE/FYI/no-action) are NOT hidden here —
+  // groupItems routes them to the collapsed Done(derived) section.
   return xs.filter(it => {
-    const eff = effectiveItem(it);
-
-    // Snoozed filter (unless showing snoozed)
-    const snoozedUntil = eff.snooze_until ? Date.parse(eff.snooze_until) : 0;
-    const isSnoozed = snoozedUntil && snoozedUntil > now;
-    if (isSnoozed && !filter.showSnoozed) return false;
-
-    // No-action hide — when inference ran and concluded nothing is
-    // needed (empty actions on FYI/DONE), don't clutter the dashboard
-    // with "No action needed" cards. The user can still reach them by
-    // clicking the FYI or Done pill explicitly; we only auto-hide when
-    // the status filter is unset OR doesn't specifically target them.
-    const isNoAction = Array.isArray(it.inference_actions)
-                    && it.inference_actions.length === 0
-                    && (eff.status === 'FYI' || eff.status === 'DONE');
-    const statusTargetsNoAction = statusList.length > 0
-      && (statusList.includes('FYI') || statusList.includes('DONE'));
-    if (isNoAction && !statusTargetsNoAction) return false;
-
     // Scope
-    if (filter.scope === 'needs_reply'  && !eff.needs_reply)      return false;
-    if (filter.scope === 'mentions'     && !it.is_mention)          return false;
-    if (filter.scope === 'dms'          && it.kind !== 'dm')      return false;
+    if (filter.scope === 'needs_reply'  && !it.needs_reply)      return false;
+    if (filter.scope === 'mentions'     && !it.is_mention)       return false;
+    if (filter.scope === 'dms'          && it.kind !== 'dm')     return false;
     if (filter.scope === 'channels'     && it.kind !== 'channel') return false;
 
     // Status (multi-select)
-    if (statusList.length && !statusList.includes((eff.status || '').toUpperCase())) return false;
+    if (statusList.length && !statusList.includes((it.status || '').toUpperCase())) return false;
 
     // Search across channel/person/text/participants
     if (q) {
@@ -2158,9 +2096,6 @@ function bootFilters() {
     clearTimeout(tmr);
     tmr = setTimeout(() => { filter.query = input.value; render(); }, 150);
   });
-  // Show snoozed
-  const snz = document.getElementById('showSnoozed');
-  if (snz) snz.addEventListener('change', () => { filter.showSnoozed = snz.checked; render(); });
   // Done(derived) collapse toggle
   const dt = document.getElementById('doneToggle');
   const di = document.getElementById('doneInner');
@@ -2209,14 +2144,10 @@ function humanAge(h) {
   return `${Math.round(h / 24)}d ago`;
 }
 
+// Read-only model: an item's status/needs_reply come straight from the
+// cache inference. Kept as a thin shim so existing call sites compile.
 function effectiveItem(it) {
-  const ov = overrides[it.key] || {};
-  return {
-    status: ov.status || it.status,
-    needs_reply: (ov.needs_reply !== undefined) ? ov.needs_reply : it.needs_reply,
-    snoozed: !!ov.snoozed,
-    note: ov.note || '',
-  };
+  return { status: it.status, needs_reply: it.needs_reply, note: '' };
 }
 
 // ========================================================================
@@ -2369,22 +2300,15 @@ function openPanel(itemKey, triggerEl) {
   panelItemKey = itemKey;
   panelTriggerEl = triggerEl || null;
 
-  const eff = effectiveItem(it);
   document.getElementById('panelChannel').textContent = it.channel_display || it.channel_name || it.channel_id;
   document.getElementById('panelChannelType').textContent =
     it.kind === 'dm' ? 'Direct message' : (it.kind === 'channel' ? 'Channel' : 'Thread');
-  document.getElementById('panelStatus').textContent = eff.status || 'AWAITING YOUR REPLY';
-  document.getElementById('panelNote').value = eff.note || '';
+  document.getElementById('panelStatus').textContent =
+    STATUS_LABELS[(it.status || 'UNKNOWN').toUpperCase()] || it.status || 'Unread by triage';
 
-  // Action handlers (bound fresh each open so they close over `it`)
+  // Read-only action handlers (bound fresh each open so they close over `it`).
   document.getElementById('actOpen').onclick = () => { if (it.permalink) window.open(it.permalink, '_blank'); };
   document.getElementById('actCopy').onclick = () => { if (it.permalink && navigator.clipboard) navigator.clipboard.writeText(it.permalink); };
-  document.getElementById('actDone').onclick = () => {
-    overrideFor(itemKey).status = 'DONE';
-    saveOverrides(); render(); closePanel();
-  };
-  document.getElementById('actStatus').onclick = (e) => openStatusMenu(it, e.currentTarget);
-  document.getElementById('actSnooze').onclick = (e) => openSnoozeMenu(it, e.currentTarget);
 
   // Render the thread messages
   const threadEl = document.getElementById('panelThread');
@@ -2438,12 +2362,6 @@ function openPanel(itemKey, triggerEl) {
   document.getElementById('sidePanel').hidden = false;
   document.getElementById('panelBackdrop').hidden = false;
   document.getElementById('panelClose').focus();
-
-  // Persist note on blur
-  document.getElementById('panelNote').onblur = () => {
-    overrideFor(itemKey).note = document.getElementById('panelNote').value;
-    saveOverrides();
-  };
 }
 
 function closePanel() {
@@ -2456,94 +2374,12 @@ function closePanel() {
 }
 
 // ========================================================================
-// Row actions + inline menus (status / snooze)
+// Row actions (read-only): open in Slack / copy permalink only.
 // ========================================================================
-function handleRowAction(action, it, anchorEl) {
+function handleRowAction(action, it) {
   if (!it) return;
-  if (action === 'open')    { if (it.permalink) window.open(it.permalink, '_blank'); return; }
-  if (action === 'copy')    { if (it.permalink && navigator.clipboard) navigator.clipboard.writeText(it.permalink); return; }
-  if (action === 'done')    { overrideFor(it.key).status = 'DONE'; saveOverrides(); render(); return; }
-  if (action === 'replied') { overrideFor(it.key).status = 'WAITING'; saveOverrides(); render(); return; }
-  if (action === 'status')  return openStatusMenu(it, anchorEl);
-  if (action === 'snooze')  return openSnoozeMenu(it, anchorEl);
-  if (action === 'more')    return openMoreMenu(it, anchorEl);
-}
-
-function openMoreMenu(it, anchorEl) {
-  // Snooze is also listed here because its primary icon gets hidden in
-  // narrow-card container queries. Replied lives only here — it was
-  // promoted out of the always-visible tail to keep cards visually quiet.
-  openMenu(anchorEl, [
-    { label: '↩ Mark replied',     onClick: () => { overrideFor(it.key).status = 'WAITING'; saveOverrides(); render(); } },
-    { label: '☾ Snooze…',          onClick: () => openSnoozeMenu(it, anchorEl) },
-    { label: '✓ Mark done',        onClick: () => { overrideFor(it.key).status = 'DONE'; saveOverrides(); render(); } },
-    { label: '◐ Change status…',   onClick: () => openStatusMenu(it, anchorEl) },
-    { label: '⎘ Copy permalink',   onClick: () => { if (it.permalink && navigator.clipboard) navigator.clipboard.writeText(it.permalink); } },
-  ]);
-}
-
-function openMenu(anchorEl, itemsList) {
-  closeOpenMenu();
-  const menu = document.createElement('div');
-  menu.className = 'sl-menu';
-  menu.id = 'activeMenu';
-  // Capture reference so a cascading onClick (one that opens a NEW menu)
-  // doesn't accidentally close the freshly-opened menu. See bug: clicking
-  // "Change status…" inside the more-menu used to flash and disappear.
-  const thisMenu = menu;
-  for (const mi of itemsList) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = mi.label;
-    b.addEventListener('click', (e) => {
-      e.stopPropagation();
-      mi.onClick();
-      // Only close if this menu is still the active one — if onClick
-      // opened a replacement menu, the reference check fails and we leave
-      // the new menu visible.
-      if (document.getElementById('activeMenu') === thisMenu) thisMenu.remove();
-    });
-    menu.appendChild(b);
-  }
-  const rect = anchorEl.getBoundingClientRect();
-  menu.style.left = Math.max(8, rect.right - 180) + 'px';
-  menu.style.top = (rect.bottom + 4 + window.scrollY) + 'px';
-  document.body.appendChild(menu);
-  setTimeout(() => document.addEventListener('click', menuOutsideClick, { once: true }), 0);
-}
-function closeOpenMenu() {
-  const m = document.getElementById('activeMenu');
-  if (m) m.remove();
-}
-function menuOutsideClick(e) {
-  if (!e.target.closest('#activeMenu')) closeOpenMenu();
-}
-function openStatusMenu(it, anchorEl) {
-  openMenu(anchorEl, STATUSES.map(s => ({
-    label: s,
-    onClick: () => { overrideFor(it.key).status = s; saveOverrides(); render(); },
-  })));
-}
-function openSnoozeMenu(it, anchorEl) {
-  const now = Date.now();
-  openMenu(anchorEl, [
-    { label: '1 hour',             onClick: () => snooze(it, now + 60 * 60 * 1000) },
-    { label: 'Until 9am tomorrow', onClick: () => {
-        const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
-        snooze(it, d.getTime());
-    }},
-    { label: 'Custom…', onClick: () => {
-        const s = prompt('Snooze until (YYYY-MM-DD HH:MM):');
-        if (!s) return;
-        const t = Date.parse(s.replace(' ', 'T'));
-        if (!isNaN(t)) snooze(it, t);
-    }},
-    { label: 'Clear snooze', onClick: () => { overrideFor(it.key).snooze_until = null; saveOverrides(); render(); }},
-  ]);
-}
-function snooze(it, millis) {
-  overrideFor(it.key).snooze_until = new Date(millis).toISOString();
-  saveOverrides(); render();
+  if (action === 'open') { if (it.permalink) window.open(it.permalink, '_blank'); return; }
+  if (action === 'copy') { if (it.permalink && navigator.clipboard) navigator.clipboard.writeText(it.permalink); return; }
 }
 
 function bootSidePanel() {
@@ -2559,31 +2395,13 @@ function bootSidePanel() {
     const actBtn = e.target.closest('.sl-item-go');
     if (actBtn) {
       const row = actBtn.closest('.sl-item');
-      const it = findItem(row.dataset.key);
-      handleRowAction(actBtn.dataset.action, it, actBtn);
+      handleRowAction(actBtn.dataset.action, findItem(row.dataset.key));
       e.stopPropagation();
       return;
     }
     const row = e.target.closest('.sl-item');
     if (!row) return;
     openPanel(row.dataset.key, row);
-  });
-
-  // Right-click shows the same combined menu
-  document.getElementById('channelFlow').addEventListener('contextmenu', e => {
-    const row = e.target.closest('.sl-item');
-    if (!row) return;
-    e.preventDefault();
-    const it = findItem(row.dataset.key);
-    if (!it) return;
-    openMenu(row, [
-      { label: 'Open in Slack',        onClick: () => { if (it.permalink) window.open(it.permalink, '_blank'); } },
-      { label: 'Copy permalink',       onClick: () => { if (it.permalink && navigator.clipboard) navigator.clipboard.writeText(it.permalink); } },
-      { label: 'Mark replied',         onClick: () => { overrideFor(it.key).status = 'WAITING'; saveOverrides(); render(); } },
-      { label: 'Mark done',            onClick: () => { overrideFor(it.key).status = 'DONE'; saveOverrides(); render(); } },
-      { label: 'Change status…',       onClick: () => openStatusMenu(it, row) },
-      { label: 'Snooze…',              onClick: () => openSnoozeMenu(it, row) },
-    ]);
   });
 }
 </script>
