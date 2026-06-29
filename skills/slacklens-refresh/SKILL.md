@@ -718,7 +718,8 @@ inference_hit_count = (len(threads_new) - thread_inference_run_count)  # orphans
 cfg = json.load(open(os.path.join(home, "config.json")))
 priority = cfg.get("priority_people", [])
 
-me_role = (cfg.get("user") or {}).get("role") or "Software Engineer"
+me_role = ((cfg.get("user") or {}).get("role")
+           or "Frontend Engineer (also coordinates vendor/cross-team delivery)")
 
 batches = []   # [(batch_path, [thread_key, ...]), ...]
 for i in range(0, len(to_infer), BATCH_SIZE):
@@ -774,8 +775,9 @@ is pure inference done in-session.
 ### For each batch file
 
 1. Read `/tmp/slacklens-inference-batch-<n>.json`. It contains `me_id`,
-   `me_name`, `me_role` (the user's engineering role — use it to scope
-   which asks are theirs to own; see role-scope rule below), `vips`
+   `me_name`, `me_role` (the user's engineering role + coordination hat —
+   use it to scope which asks they OWN vs merely oversee; see the role-scope
+   and Ownership rules below), `vips`
    (priority contacts), and `threads` (array of
    `{thread_key, channel, messages}`). A `thread_key` prefixed with
    `search:` is a standalone bucket mention (a single message with no
@@ -870,6 +872,33 @@ is pure inference done in-session.
     user for a specific action.
   When in doubt, prefer FYI over a fake action — a muted card is
   cheaper than a false positive.
+- **Ownership — separate work you OWN from work you OVERSEE or are CC'd on.**
+  The user is a frontend engineer who ALSO sits in vendor/war-room channels
+  coordinating other teams. For each thread, decide the user's relationship:
+  - **Own** — frontend work explicitly asked of the user, or that the user has
+    taken. Eligible for `AWAITING_REPLY` / `BACKLOG` / `IN_PROGRESS`.
+  - **Oversee / track** — work being done BY another team or vendor (e.g.
+    "Persistent") where the user is coordinating or monitoring. A team-status
+    post that tags the user ("Persistent Status … DEV-3 @user", "^ for taking
+    feedback") is TRACKING → status `WAITING_ON_THEM`, NOT the user's
+    BACKLOG/IN_PROGRESS. Oversee signals: others reply "checking sir / on it",
+    the user asks them to demo/show, the item names another team's deliverable.
+  - **CC / passive** — merely mentioned, nothing asked → `FYI`.
+- **Grounding — never invent detail.** Every action must be supported by THIS
+  thread's own messages. Do not import specifics from linked threads you can't
+  see, and do not fabricate. If the thread is brief logistics ("can't call",
+  "take leave", a bare link), emit empty actions with `DISCUSSION`/`FYI` — do
+  NOT manufacture a task.
+- **Commitment for IN_PROGRESS.** `IN_PROGRESS` needs a real engagement signal
+  FROM THE USER: "on it / looking / working on it", "1,2 → In Progress", a
+  substantive question back, or a partial delivery. A bare acknowledgement
+  ("ok", "noted", "han", "han lag rha hai", "thik hai") does NOT make a thread
+  IN_PROGRESS. If there is a real frontend ask the user owns but only acked →
+  `BACKLOG`. If no clear ask the user owns → `DISCUSSION`/`FYI`.
+- **No over-bundling.** A card lists ONLY items the user owns or committed to.
+  Do not fold in others' asks, items addressed to a different person, or items
+  the user has not taken. (E.g. if the user said "1,2 → In Progress", surface
+  items 1 and 2 only — not items 3+ they never took.)
 - Messages may mix English and Hinglish (Hindi in Latin script). Treat
   both as equivalent when extracting intent. Example: `"bhai kal wala
   PR review kar diya kya?"` = "did you review yesterday's PR?".
