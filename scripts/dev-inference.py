@@ -18,7 +18,8 @@ import json
 import os
 import sys
 
-VALID_STATUSES = {"AWAITING_REPLY", "WAITING_ON_THEM", "DONE", "DISCUSSION", "FYI"}
+VALID_STATUSES = {"AWAITING_REPLY", "BACKLOG", "IN_PROGRESS",
+                  "WAITING_ON_THEM", "DONE", "DISCUSSION", "FYI"}
 MAX_MSGS_PER_THREAD = 20
 
 SYSTEM_PROMPT = (
@@ -27,29 +28,31 @@ SYSTEM_PROMPT = (
     "thread, decide what — if anything — the user needs to do.\n"
     "\n"
     "Output a JSON array with one object per thread in input order:\n"
-    "  {\n"
-    '    "actions": string[],           // 0-3 short imperatives for the user\n'
-    '    "status":  "AWAITING_REPLY" | "WAITING_ON_THEM" | "DONE" | "DISCUSSION" | "FYI"\n'
-    "  }\n"
+    '  { "actions": string[], "status": <one status enum> }\n'
     "\n"
     "Rules:\n"
-    "- actions are phrased TO the user: \"Reply to X about Y\", \"Call Z\",\n"
-    "  \"Review PR #123\", \"Confirm deployment time\", \"Nothing needed — already handled\".\n"
-    "- Each action ≤80 characters. Maximum 3 per thread.\n"
-    "- If the thread is resolved, actions can be empty OR [\"Nothing needed\"].\n"
-    "- status reflects the latest state of the thread:\n"
-    "  - AWAITING_REPLY: someone asked the user something unanswered.\n"
-    "  - WAITING_ON_THEM: the user asked / is blocking on someone else.\n"
-    "  - DONE: resolved, no further work.\n"
-    "  - DISCUSSION: general discussion, not addressed at the user specifically.\n"
-    "  - FYI: the user was CC'd or passively mentioned; no action implied.\n"
-    "- Messages may mix English and Hinglish (Hindi in Latin script). Treat\n"
-    "  both languages as equivalent when extracting intent.\n"
-    "- Output ONLY valid JSON — no prose, no code fences."
+    "- actions: 0-6 short imperatives phrased TO the user, each <=160 chars.\n"
+    "  List each ask separately; never merge into one combined string.\n"
+    "- status: one of AWAITING_REPLY | BACKLOG | IN_PROGRESS | WAITING_ON_THEM\n"
+    "  | DONE | DISCUSSION | FYI.\n"
+    "  - AWAITING_REPLY: user owes a substantive verbal reply.\n"
+    "  - BACKLOG: user assigned concrete frontend work, not started.\n"
+    "  - IN_PROGRESS: user is actively engaged (needs a real commitment\n"
+    "    signal — 'on it', a status, a question back; a bare ack does NOT count).\n"
+    "  - WAITING_ON_THEM: user replied/delegated, blocked on someone else —\n"
+    "    INCLUDING vendor/other-team work the user only oversees or is cc'd to.\n"
+    "  - DONE: resolved. DISCUSSION: general chat. FYI: passive cc, no action.\n"
+    "- Ownership: separate work the user OWNS from work they OVERSEE/are cc'd\n"
+    "  on. A team/vendor status post that tags the user is tracking\n"
+    "  (WAITING_ON_THEM), not the user's BACKLOG/IN_PROGRESS.\n"
+    "- Grounding: actions must be supported by THIS thread's messages — never\n"
+    "  fabricate or import detail from links you can't see.\n"
+    "- No over-bundling: list only items the user owns or committed to.\n"
+    "- English + Hinglish are equivalent. Output ONLY valid JSON — no fences."
 )
 
 
-def build_batch(cache, me_id, me_name, vips):
+def build_batch(cache, me_id, me_name, vips, me_role):
     """Return (prompt_text, ordered_thread_keys) for all threads in cache."""
     threads = cache.get("threads") or {}
     keys = list(threads.keys())
@@ -69,7 +72,7 @@ def build_batch(cache, me_id, me_name, vips):
         })
     vip_str = ", ".join(f"{v.get('name')} ({v.get('id')})" for v in vips) or "(none)"
     user_msg = (
-        f"User identity: slack_id={me_id}, name={me_name}.\n"
+        f"User identity: slack_id={me_id}, name={me_name}, role={me_role}.\n"
         f"Priority contacts: {vip_str}.\n\n"
         f"Here are {len(batch)} threads. Produce an inference object per thread "
         f"in the same order. Output ONLY the JSON array.\n\n"
@@ -120,7 +123,8 @@ def main():
     cache = json.load(open(args.cache, encoding="utf-8"))
     vips = [{"id": "U0VIP1", "name": "Alice VIP"}]
 
-    prompt, keys = build_batch(cache, args.me_id, args.me_name, vips)
+    prompt, keys = build_batch(cache, args.me_id, args.me_name, vips,
+                               "Frontend Engineer (also coordinates vendor/cross-team delivery)")
 
     if args.mode == "prompt":
         print(prompt)
