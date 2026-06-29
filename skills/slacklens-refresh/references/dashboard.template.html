@@ -1054,6 +1054,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
     </div>
   </main>
 
+  <!-- Waiting on others: open threads where the ball is in someone else's
+       court (incl. vendor/oversight work the user tracks but does not own).
+       Collapsed by default; subordinate to the main board. -->
+  <section id="waitingSection" class="sl-waiting" aria-label="Waiting on others" hidden>
+    <button id="waitingToggle" class="sl-done-head" type="button" aria-expanded="false">
+      Waiting on others <span id="waitingCount" class="count">0</span>
+    </button>
+    <div id="waitingInner" class="sl-done-inner" hidden></div>
+  </section>
+
   <!-- Done (derived): tasks the inference concluded are finished. Collapsed
        by default; recent-only (drops out when the thread ages past 48h). -->
   <section id="doneSection" class="sl-done" aria-label="Done (derived)" hidden>
@@ -1062,6 +1072,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
     </button>
     <div id="doneInner" class="sl-done-inner" hidden></div>
   </section>
+
+  <!-- Unknown footer: threads inference couldn't read. Counted, never
+       fabricated onto the board as a fake task. -->
+  <div id="unknownFooter" class="sl-unknown-footer" hidden></div>
 
   <!-- Empty state container (shown when nothing renders) -->
   <div id="emptyState" class="sl-empty" hidden></div>
@@ -1409,8 +1423,11 @@ function normalize() {
       searchNeedsReply = searchStatus === 'AWAITING YOUR REPLY';
       searchActions = searchInf.actions;
     } else {
-      searchStatus = lastIsMe ? 'WAITING' : 'AWAITING YOUR REPLY';
-      searchNeedsReply = !lastIsMe;
+      // No inference for this orphan bucket mention → neutral UNKNOWN, never
+      // a fabricated needs-reply/waiting task (spec §6). Routes to the footer,
+      // matching how inference-less threads are handled.
+      searchStatus = 'UNKNOWN';
+      searchNeedsReply = false;
       searchActions = null;
     }
     items.push({
@@ -1763,6 +1780,29 @@ function groupItems(allItems) {
   return g;
 }
 
+function renderWaitingLane(waitingItems) {
+  const sec   = document.getElementById('waitingSection');
+  const inner = document.getElementById('waitingInner');
+  const count = document.getElementById('waitingCount');
+  if (!sec || !inner) return;
+  inner.innerHTML = '';
+  const parts = partitionByChannel(waitingItems);
+  for (const ch of [...parts.vip, ...parts.left, ...parts.right]) {
+    inner.appendChild(renderChannel(ch, 'waiting'));
+  }
+  if (count) count.textContent = waitingItems.length;
+  sec.hidden = waitingItems.length === 0;
+}
+
+function renderUnknownFooter(unknownItems) {
+  const f = document.getElementById('unknownFooter');
+  if (!f) return;
+  const n = unknownItems.length;
+  f.hidden = n === 0;
+  f.textContent = n === 0 ? ''
+    : `${n} thread${n === 1 ? '' : 's'} couldn’t be read by triage — not shown on the board.`;
+}
+
 function renderDoneSection(closedItems) {
   const sec   = document.getElementById('doneSection');
   const inner = document.getElementById('doneInner');
@@ -1789,13 +1829,18 @@ function render() {
   rightCol.innerHTML = '';
 
   const shown = applyFilter(items);
-  // Closed (DONE/FYI/no-action) items drop into the Done(derived) section;
-  // everything else fills the main columns. Done renders here, before the
-  // active-column empty-state early-returns, so "all done" still shows it.
+  // Status-only routing: ONLY the on-me board (AWAITING/BACKLOG/IN PROGRESS)
+  // fills the main columns. WAITING → its own collapsed lane, DONE → the
+  // Done(derived) section, UNKNOWN → a footer count, DISCUSSION/FYI → dropped.
+  // Lanes render here, before the empty-state early-returns, so they persist.
   const grouped = groupItems(shown);
-  const active = [...grouped.open, ...grouped.waiting, ...grouped.unknown, ...grouped.ambient];
+  const active = [...grouped.board];
   const parts = partitionByChannel(active);
-  renderDoneSection(grouped.closed);
+  const visibleCount = active.length + grouped.waiting.length + grouped.done.length;
+  renderWaitingLane(grouped.waiting);
+  renderDoneSection(grouped.done);
+  renderUnknownFooter(grouped.unknown);
+  // grouped.dropped (DISCUSSION/FYI) is intentionally not rendered.
 
   // Four empty-state paths — the differentiation matters for UX, so keep
   // each branch distinct. "Never refreshed" and "refreshed but silent"
@@ -1817,7 +1862,7 @@ function render() {
     (Array.isArray(filter.status) && filter.status.length > 0) ||
     (filter.query || '').trim() !== '';
 
-  if (shown.length === 0 && activelyFiltered) {
+  if (visibleCount === 0 && activelyFiltered) {
     empty.hidden = false;
     empty.innerHTML =
       '<h4>Nothing matches</h4>' +
@@ -1839,10 +1884,10 @@ function render() {
     return;
   }
 
-  if (shown.length === 0) {
-    // Genuine quiet period — cache is fresh, Slack just returned nothing.
-    // Show when we last checked so the user can tell this apart from
-    // "maybe refresh is broken?".
+  if (visibleCount === 0) {
+    // Genuine quiet period — cache is fresh, Slack just returned nothing
+    // actionable. Show when we last checked so the user can tell this apart
+    // from "maybe refresh is broken?".
     empty.hidden = false;
     const t = Date.parse(raw.refreshed_at);
     const ageHours = isFinite(t) ? (Date.now() - t) / 3600000 : null;
@@ -2101,6 +2146,12 @@ function bootFilters() {
   const di = document.getElementById('doneInner');
   if (dt && di) dt.addEventListener('click', () => {
     const open = di.hidden; di.hidden = !open; dt.setAttribute('aria-expanded', String(open));
+  });
+  // Waiting-lane collapse toggle (mirrors Done)
+  const wt = document.getElementById('waitingToggle');
+  const wi = document.getElementById('waitingInner');
+  if (wt && wi) wt.addEventListener('click', () => {
+    const open = wi.hidden; wi.hidden = !open; wt.setAttribute('aria-expanded', String(open));
   });
 }
 const STALE_CACHE_HOURS = 12;      // amber: ">12h" — worth refreshing soon
