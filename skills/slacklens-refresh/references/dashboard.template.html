@@ -1741,24 +1741,24 @@ function partitionByChannel(flatItems) {
   return { vip, left, right, total: all.length };
 }
 
-// Map an item's status into a coarse tracker group.
-//   open    — AWAITING YOUR REPLY / BACKLOG / IN PROGRESS (ball in my court)
-//   waiting — WAITING (blocked on someone else)
-//   ambient — DISCUSSION (no explicit task)
-//   closed  — DONE / FYI / inference concluded no action → Done(derived)
-//   unknown — no inference yet (neutral; not a fake task)
+// Route an item by its inference status into one tracker lane:
+//   board   — AWAITING YOUR REPLY / BACKLOG / IN PROGRESS (the user's move)
+//   waiting — WAITING (blocked on someone else; tracked, subordinate lane)
+//   done    — DONE → Done(derived) section
+//   dropped — DISCUSSION / FYI (not actionable → not rendered at all)
+//   unknown — no inference yet (couldn't read; footer, never a fake task)
+// Routing is status-only: the loose needs_action / empty-actions gate is gone.
 function statusGroup(it) {
-  const noAction = Array.isArray(it.inference_actions) && it.inference_actions.length === 0;
   const s = (it.status || 'UNKNOWN').toUpperCase();
-  if (s === 'DONE' || s === 'FYI' || noAction) return 'closed';
-  if (s === 'UNKNOWN')                         return 'unknown';
-  if (s === 'WAITING')                         return 'waiting';
-  if (s === 'DISCUSSION')                      return 'ambient';
-  return 'open';
+  if (s === 'DONE')                      return 'done';
+  if (s === 'DISCUSSION' || s === 'FYI') return 'dropped';
+  if (s === 'WAITING')                   return 'waiting';
+  if (s === 'UNKNOWN')                   return 'unknown';
+  return 'board';   // AWAITING YOUR REPLY / BACKLOG / IN PROGRESS
 }
 
 function groupItems(allItems) {
-  const g = { open: [], waiting: [], ambient: [], closed: [], unknown: [] };
+  const g = { board: [], waiting: [], done: [], dropped: [], unknown: [] };
   for (const it of allItems) g[statusGroup(it)].push(it);
   return g;
 }

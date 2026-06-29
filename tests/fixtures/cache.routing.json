@@ -1,0 +1,47 @@
+{
+  "version": 3,
+  "refreshed_at": "2026-06-30T10:00:00+05:30",
+  "mode": "FULL",
+  "search_results": { "mentions": [], "dms": [], "channels": [] },
+  "threads": {
+    "C_AWAIT:1700000010.0": {
+      "channel_id": "C_AWAIT", "channel_name": "await", "thread_ts": "1700000010.0", "reply_count": 1,
+      "inference": { "actions": ["Reply to Alice with the ETA"], "status": "AWAITING_REPLY", "needs_action": true, "inferred_for_ts": "1700000010.0" },
+      "messages": [ { "from": "Alice (U_ALICE)", "from_user_id": "U_ALICE", "ts": "1700000010.0", "mentioned_ids": ["U_ME"], "time": "2026-06-30 10:00:00 IST", "text": "<@U_ME> ETA?", "permalink": "https://x.slack.com/archives/C_AWAIT/p1700000010" } ]
+    },
+    "C_BACK:1700000020.0": {
+      "channel_id": "C_BACK", "channel_name": "backlog", "thread_ts": "1700000020.0", "reply_count": 1,
+      "inference": { "actions": ["Review the AI Agents module"], "status": "BACKLOG", "needs_action": true, "inferred_for_ts": "1700000020.0" },
+      "messages": [ { "from": "Bob (U_BOB)", "from_user_id": "U_BOB", "ts": "1700000020.0", "mentioned_ids": ["U_ME"], "time": "2026-06-30 10:01:00 IST", "text": "<@U_ME> please review the module", "permalink": "https://x.slack.com/archives/C_BACK/p1700000020" } ]
+    },
+    "C_PROG:1700000030.0": {
+      "channel_id": "C_PROG", "channel_name": "progress", "thread_ts": "1700000030.0", "reply_count": 2,
+      "inference": { "actions": ["Finish the canvas corner fix"], "status": "IN_PROGRESS", "needs_action": true, "inferred_for_ts": "1700000030.0" },
+      "messages": [ { "from": "Me (U_ME)", "from_user_id": "U_ME", "ts": "1700000030.0", "mentioned_ids": [], "time": "2026-06-30 10:02:00 IST", "text": "on it, fixing now", "permalink": "https://x.slack.com/archives/C_PROG/p1700000030" } ]
+    },
+    "C_WAIT:1700000040.0": {
+      "channel_id": "C_WAIT", "channel_name": "waiting", "thread_ts": "1700000040.0", "reply_count": 2,
+      "inference": { "actions": ["Wait for Carol to approve the PR"], "status": "WAITING_ON_THEM", "needs_action": false, "inferred_for_ts": "1700000040.0" },
+      "messages": [ { "from": "Me (U_ME)", "from_user_id": "U_ME", "ts": "1700000040.0", "mentioned_ids": [], "time": "2026-06-30 10:03:00 IST", "text": "PR raised, @Carol please approve", "permalink": "https://x.slack.com/archives/C_WAIT/p1700000040" } ]
+    },
+    "C_DISC:1700000050.0": {
+      "channel_id": "C_DISC", "channel_name": "discuss", "thread_ts": "1700000050.0", "reply_count": 1,
+      "inference": { "actions": [], "status": "DISCUSSION", "needs_action": false, "inferred_for_ts": "1700000050.0" },
+      "messages": [ { "from": "Dan (U_DAN)", "from_user_id": "U_DAN", "ts": "1700000050.0", "mentioned_ids": [], "time": "2026-06-30 10:04:00 IST", "text": "general chatter about the roadmap", "permalink": "https://x.slack.com/archives/C_DISC/p1700000050" } ]
+    },
+    "C_FYI:1700000060.0": {
+      "channel_id": "C_FYI", "channel_name": "fyi", "thread_ts": "1700000060.0", "reply_count": 1,
+      "inference": { "actions": [], "status": "FYI", "needs_action": false, "inferred_for_ts": "1700000060.0" },
+      "messages": [ { "from": "Eve (U_EVE)", "from_user_id": "U_EVE", "ts": "1700000060.0", "mentioned_ids": ["U_ME"], "time": "2026-06-30 10:05:00 IST", "text": "cc <@U_ME> deployment done", "permalink": "https://x.slack.com/archives/C_FYI/p1700000060" } ]
+    },
+    "C_DONE:1700000070.0": {
+      "channel_id": "C_DONE", "channel_name": "done", "thread_ts": "1700000070.0", "reply_count": 2,
+      "inference": { "actions": ["Nothing needed — already handled"], "status": "DONE", "needs_action": false, "inferred_for_ts": "1700000070.0" },
+      "messages": [ { "from": "Me (U_ME)", "from_user_id": "U_ME", "ts": "1700000070.0", "mentioned_ids": [], "time": "2026-06-30 10:06:00 IST", "text": "merged, done", "permalink": "https://x.slack.com/archives/C_DONE/p1700000070" } ]
+    },
+    "C_RAW:1700000080.0": {
+      "channel_id": "C_RAW", "channel_name": "raw", "thread_ts": "1700000080.0", "reply_count": 0,
+      "messages": [ { "from": "Fay (U_FAY)", "from_user_id": "U_FAY", "ts": "1700000080.0", "mentioned_ids": [], "time": "2026-06-30 10:07:00 IST", "text": "anyone around?", "permalink": "https://x.slack.com/archives/C_RAW/p1700000080" } ]
+    }
+  }
+}
