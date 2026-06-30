@@ -104,17 +104,28 @@ above runs: `SLACKLENS_FORCE_FULL=1`.
 ## Step 1 — Fetch Slack data
 
 Run **three** Slack searches via `slack_search_public_and_private`.
-**Pin `limit: 50` on every call.** Without an explicit limit, the MCP
-picks its own default (typically 10-20), which silently drops results
-on busy days. 50 is a conservative upper bound — covers ~2x the volume
-a heavy user sees in 48 hours without risking rate-limit pressure on
-Slack Enterprise plans.
+**Pin `limit: 20` on every call** (the MCP hard-caps `limit` at 20;
+without it the default is ~10, silently dropping results on busy days).
+Also pin `sort: "timestamp", sort_dir: "desc"` so the newest activity
+wins when the 20-cap bites.
 
-Also pin `response_format: "concise"` and `include_context: false` on
-each call — these strip the verbose per-result HTML/attachment blobs
-Slack returns by default, keeping the payload inside token budget
-without losing the fields we actually cache (channel_id, channel_name,
-from_user, message_ts, text, time, permalink).
+**Pin `response_format: "detailed"` and `include_context: false`.**
+`detailed` is the ONLY format that returns the structured fields we
+cache — it emits, per result, a readable block:
+`Channel: #name (ID: C…)`, `From: Name <email> (ID: U…)`,
+`Message_ts: …`, `Permalink: …`, `Text: …`. **`concise` OMITS
+channel_id / message_ts / permalink and is unusable — do not use it.**
+The MCP returns these as **markdown text, not JSON**: parse each
+`### Result` block into the per-result fields below when building the
+payload (`from_user` = `"Name (U…)"`, `message_ts`, `permalink`,
+`channel_id`, `channel_name`, `text`, `time`). `include_context: false`
+still strips the verbose surrounding-context blobs to stay in budget.
+
+**`after:` is UTC-and-exclusive at day boundaries.** `after:2026-06-30`
+returns NOTHING for messages timestamped 2026-06-30 in a +0530 zone
+(they are 06-29 in UTC). Always pass `after:` as the day BEFORE your
+true cutoff, then client-filter results by `float(message_ts) >=
+SINCE_EPOCH` (DELTA already does this) so you never miss "today".
 
 | Bucket     | Query                                                                            | What it captures |
 |------------|----------------------------------------------------------------------------------|------------------|
@@ -122,7 +133,7 @@ from_user, message_ts, text, time, permalink).
 | `dms`      | `from:<@USER_ID> after:AFTER channel_types:im,mpim`                              | The user's outgoing DMs |
 | `channels` | `<@USER_ID> after:AFTER channel_types:public_channel,private_channel`            | @-mentions in channels |
 
-Each call: `query: <as above>, limit: 50, response_format: "concise", include_context: false`.
+Each call: `query: <as above>, limit: 20, response_format: "detailed", include_context: false, sort: "timestamp", sort_dir: "desc"`.
 
 ### Mode-specific post-processing
 
