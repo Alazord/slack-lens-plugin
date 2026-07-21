@@ -8,8 +8,8 @@
   "plugins": [
     {
       "name": "slacklens",
-      "description": "Personal Slack triage dashboard for Claude Code. Four-tier priority scoring — a priority contact's direct message outranks a fresh casual ping. Cache schema v2 carries structured IDs + mentions + reply counts. Pinned search limits, permalink-based dedupe, and atomic cache writes with backup + suspicious-refresh guard. DELTA refresh. Stale-cache warnings. Token-cost instrumentation in the refresh log. Eight skills including one-command help and one-command uninstall.",
-      "version": "0.11.0",
+      "description": "Personal Slack triage dashboard for Claude Code. Status-driven routing: each thread card shows a one-line \"what to do\" inferred by Claude from the whole thread (Hinglish supported), routed into board/waiting/done/dropped lanes by inferred status with ownership/grounding/commitment rules (R1–R4). Four-tier priority scoring — a priority contact's direct message outranks a fresh casual ping. Cache schema v3 with per-thread inference cached by last-message-ts. Relative time labels from reliable unix-epoch timestamps. Pinned search limits, permalink dedupe, atomic cache writes with backup + suspicious-refresh guard. DELTA refresh. Stale-cache warnings. Token-cost instrumentation in the refresh log.",
+      "version": "0.14.0",
       "source": "./",
       "author": {
         "name": "Shailendra Singh"
