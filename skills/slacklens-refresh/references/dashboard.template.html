@@ -1926,10 +1926,12 @@ function renderChannel(ch, colKind) {
 
   const meta = document.createElement('div');
   meta.className = 'sl-channel-meta';
-  const shortTime = (ch.last_time || '').slice(11, 16);  // "HH:MM" from "YYYY-MM-DD HH:MM:SS ..."
+  const when = whenLabel(ch.last_ts) || (ch.last_time || '').slice(11, 16);
   meta.textContent = ch.items.length > 1
-    ? `${shortTime} · ${ch.items.length}`
-    : shortTime;
+    ? `${when} · ${ch.items.length}`
+    : when;
+  const metaTitle = whenTitle(ch.last_ts);
+  if (metaTitle) meta.title = 'Latest update: ' + metaTitle;
   head.appendChild(meta);
 
   wrap.appendChild(head);
@@ -1964,7 +1966,9 @@ function renderItem(it) {
   status.textContent = STATUS_LABELS[row.dataset.status] || row.dataset.status;
   const time = document.createElement('span');
   time.className = 'sl-item-time';
-  time.textContent = (it.last_time || '').slice(11, 16);
+  time.textContent = whenLabel(it.last_ts) || (it.last_time || '').slice(11, 16);
+  const tTitle = whenTitle(it.last_ts);
+  if (tTitle) time.title = 'Latest update: ' + tTitle;
   right.appendChild(status); right.appendChild(time);
   head.appendChild(from); head.appendChild(right);
   body.appendChild(head);
@@ -2193,6 +2197,34 @@ function humanAge(h) {
   if (h < 1)    return `${Math.round(h * 60)}m ago`;
   if (h < 24)   return `${Math.round(h)}h ago`;
   return `${Math.round(h / 24)}d ago`;
+}
+
+// When the latest relevant message on a card/channel landed, from the
+// reliable unix-epoch `last_ts` (not the frozen `last_time` string, which
+// only carries HH:MM and can't disambiguate today vs days ago). Rendered in
+// the viewer's local timezone. Recent → relative; today → HH:MM; then
+// Yst/weekday+time; older → "DD Mon".
+function whenLabel(ts) {
+  const t = Number(ts) || 0;
+  if (!t) return '';
+  const then = new Date(t * 1000);
+  const now = new Date();
+  const mins = (now - then) / 60000;
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${Math.round(mins)}m ago`;
+  const hhmm = then.toTimeString().slice(0, 5);
+  if (then.toDateString() === now.toDateString()) return hhmm;
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  if (then.toDateString() === y.toDateString()) return `Yst ${hhmm}`;
+  if ((now - then) / 86400000 < 7)
+    return `${then.toLocaleDateString(undefined, { weekday: 'short' })} ${hhmm}`;
+  return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+// Full absolute timestamp for the hover tooltip.
+function whenTitle(ts) {
+  const t = Number(ts) || 0;
+  return t ? new Date(t * 1000).toLocaleString() : '';
 }
 
 // Read-only model: an item's status/needs_reply come straight from the
