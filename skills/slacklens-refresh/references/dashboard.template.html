@@ -1625,9 +1625,18 @@ function prettyChannel(name, id) {
   }
   return '#' + name.replace(/^#/,'');
 }
+// Build a Slack deep link for a thread when the message carries no permalink
+// of its own. Only a real Slack timestamp ("1784915043.043210") can go into a
+// /p<ts> path — DMs store the sentinel thread_ts "convo" (and top-level msgs
+// "top_level"), which must NOT be spliced in (that produced dead ".../pconvo"
+// links). Prefer thread_ts when it's a real ts, else the message ts; if
+// neither is a timestamp, fall back to the bare channel URL (still valid —
+// opens the conversation).
 function deriveThreadPermalink(t, msg) {
   if (msg && msg.permalink) return msg.permalink;
-  const ts = (t.thread_ts && t.thread_ts !== 'top_level') ? t.thread_ts : (msg ? msg.ts : '');
+  const isTs = v => typeof v === 'string' && /^\d+\.\d+$/.test(v);
+  const ts = isTs(t.thread_ts) ? t.thread_ts
+           : (msg && isTs(msg.ts) ? msg.ts : '');
   if (!ts) return `${WORKSPACE_ORIGIN}/archives/${t.channel_id}`;
   return `${WORKSPACE_ORIGIN}/archives/${t.channel_id}/p${ts.replace('.','')}`;
 }

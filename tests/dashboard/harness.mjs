@@ -54,6 +54,7 @@ export function loadDashboard({ cache, me = { slack_id: 'U_ME', name: 'Me' }, vi
   statusGroup: (typeof statusGroup==='function'?statusGroup:undefined),
   routeLanes: (typeof routeLanes==='function'?routeLanes:undefined),
   laneLayout: (typeof laneLayout==='function'?laneLayout:undefined),
+  deriveThreadPermalink: (typeof deriveThreadPermalink==='function'?deriveThreadPermalink:undefined),
   isVipPriority: (typeof isVipPriority==='function'?isVipPriority:undefined),
   partitionByChannel: (typeof partitionByChannel==='function'?partitionByChannel:undefined),
 };`;
