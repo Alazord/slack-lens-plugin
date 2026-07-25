@@ -308,6 +308,13 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Member roster appended to a bare "Group DM" heading — secondary weight so
+   it reads as a subtitle beside the bold channel name. */
+.sl-channel-members {
+  font-weight: 400;
+  color: var(--ink-faint);
+  font-size: var(--fs-sm);
+}
 .sl-col--channels .sl-channel-head { border-bottom-color: color-mix(in srgb, var(--chan-accent) 20%, var(--border-faint)); }
 .sl-col--dms .sl-channel-head      { border-bottom-color: color-mix(in srgb, var(--dm-accent) 20%, var(--border-faint)); }
 .sl-channel-meta {
@@ -1971,6 +1978,18 @@ function render() {
   updateFreshness();
 }
 
+// Group DMs frequently arrive with a bare "Group DM" channel_name and no
+// member list, so the heading is unidentifiable. Derive the roster from the
+// folded messages' senders (same source the footer uses) → "Hatim, Abhinav,
+// Abhay +1". Drops me, caps at 3 names + an overflow count.
+function groupMembersLabel(items) {
+  const members = Array.from(new Set(
+    (items || []).flatMap(it => it.participants || [])
+  )).filter(n => n && !isMe(n));
+  if (!members.length) return '';
+  return members.slice(0, 3).join(', ') + (members.length > 3 ? ` +${members.length - 3}` : '');
+}
+
 function renderChannel(ch, colKind) {
   const wrap = document.createElement('section');
   wrap.className = 'sl-channel';
@@ -1982,6 +2001,17 @@ function renderChannel(ch, colKind) {
   const name = document.createElement('div');
   name.className = 'sl-channel-name';
   name.textContent = ch.display;
+  // Augment a bare "Group DM" heading with its members; when channel_name
+  // already carried names, prettyChannel produced "Group · …" and we leave it.
+  if (ch.is_group_dm && /^group dm$/i.test(ch.display)) {
+    const label = groupMembersLabel(ch.items);
+    if (label) {
+      const who = document.createElement('span');
+      who.className = 'sl-channel-members';
+      who.textContent = ' · ' + label;
+      name.appendChild(who);
+    }
+  }
   head.appendChild(name);
 
   const meta = document.createElement('div');
