@@ -52,6 +52,9 @@ export function loadDashboard({ cache, me = { slack_id: 'U_ME', name: 'Me' }, vi
   computeCounts: (typeof computeCounts==='function'?computeCounts:undefined),
   groupItems: (typeof groupItems==='function'?groupItems:undefined),
   statusGroup: (typeof statusGroup==='function'?statusGroup:undefined),
+  routeLanes: (typeof routeLanes==='function'?routeLanes:undefined),
+  isVipPriority: (typeof isVipPriority==='function'?isVipPriority:undefined),
+  partitionByChannel: (typeof partitionByChannel==='function'?partitionByChannel:undefined),
 };`;
   const ctx = domStubContext();
   vm.createContext(ctx);

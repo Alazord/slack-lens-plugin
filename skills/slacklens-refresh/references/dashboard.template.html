@@ -219,7 +219,7 @@ body {
   padding-bottom: 8px;
   border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
 }
-.sl-col--channels::before { content: "# CHANNELS"; color: var(--chan-accent); }
+.sl-col--channels::before { content: "# CHANNELS & GROUP DMs"; color: var(--chan-accent); }
 .sl-col--dms::before      { content: "@ DIRECT MESSAGES"; color: var(--dm-accent); }
 .sl-col:empty { display: none; }
 
@@ -1780,6 +1780,33 @@ function groupItems(allItems) {
   return g;
 }
 
+// A priority contact's message ALWAYS surfaces in the ★ HIGH PRIORITY band
+// unless it's DONE. This is the VIP override: it outranks status routing, so a
+// VIP FYI/DISCUSSION/WAITING/UNKNOWN that its status alone would hide (or drop)
+// is rescued into the band. DONE is the one exception — a resolved VIP thread
+// stays in the Done section rather than shouting from the top.
+function isVipPriority(it) {
+  return Boolean(it.channel_is_vip) &&
+    (it.status || 'UNKNOWN').toUpperCase() !== 'DONE';
+}
+
+// Layer the VIP override on top of status routing and return the item set for
+// each rendered surface. band = non-DONE VIP (from any status); board/waiting/
+// unknown = their status lane minus the VIP items promoted to the band; done =
+// unchanged (VIP DONE stays here). Non-VIP DISCUSSION/FYI (grouped.dropped) is
+// not returned — it isn't rendered anywhere.
+function routeLanes(shown) {
+  const g = groupItems(shown);
+  const notPromoted = it => !isVipPriority(it);
+  return {
+    band:    shown.filter(isVipPriority),
+    board:   g.board.filter(notPromoted),
+    waiting: g.waiting.filter(notPromoted),
+    unknown: g.unknown.filter(notPromoted),
+    done:    g.done,
+  };
+}
+
 function renderWaitingLane(waitingItems) {
   const sec   = document.getElementById('waitingSection');
   const inner = document.getElementById('waitingInner');
@@ -1829,18 +1856,18 @@ function render() {
   rightCol.innerHTML = '';
 
   const shown = applyFilter(items);
-  // Status-only routing: ONLY the on-me board (AWAITING/BACKLOG/IN PROGRESS)
-  // fills the main columns. WAITING → its own collapsed lane, DONE → the
-  // Done(derived) section, UNKNOWN → a footer count, DISCUSSION/FYI → dropped.
-  // Lanes render here, before the empty-state early-returns, so they persist.
-  const grouped = groupItems(shown);
-  const active = [...grouped.board];
-  const parts = partitionByChannel(active);
-  const visibleCount = active.length + grouped.waiting.length + grouped.done.length;
-  renderWaitingLane(grouped.waiting);
-  renderDoneSection(grouped.done);
-  renderUnknownFooter(grouped.unknown);
-  // grouped.dropped (DISCUSSION/FYI) is intentionally not rendered.
+  // Status routing with a VIP override — see routeLanes(). Lanes render here,
+  // before the empty-state early-returns, so they persist.
+  const lanes     = routeLanes(shown);
+  const parts     = partitionByChannel(lanes.board);   // non-VIP board → columns
+  const bandParts = partitionByChannel(lanes.band);     // all non-DONE VIP → band
+  const visibleCount =
+    lanes.band.length + lanes.board.length + lanes.waiting.length + lanes.done.length;
+  renderWaitingLane(lanes.waiting);
+  renderDoneSection(lanes.done);
+  renderUnknownFooter(lanes.unknown);
+  // lanes.dropped (non-VIP DISCUSSION/FYI) is intentionally not rendered; any
+  // VIP items in it were already rescued into lanes.band by routeLanes().
 
   // Four empty-state paths — the differentiation matters for UX, so keep
   // each branch distinct. "Never refreshed" and "refreshed but silent"
@@ -1901,9 +1928,12 @@ function render() {
   }
   empty.hidden = true;
 
-  // VIP band — only show if non-empty
-  vipBand.hidden = parts.vip.length === 0;
-  for (const ch of parts.vip)   vipInner.appendChild(renderChannel(ch, 'vip'));
+  // ★ HIGH PRIORITY band — every non-DONE VIP item. All band items are
+  // channel_is_vip so they land in bandParts.vip; iterate all three buckets
+  // defensively so nothing is silently dropped.
+  vipBand.hidden = lanes.band.length === 0;
+  for (const ch of [...bandParts.vip, ...bandParts.left, ...bandParts.right])
+    vipInner.appendChild(renderChannel(ch, 'vip'));
   for (const ch of parts.left)  leftCol.appendChild(renderChannel(ch, 'channel'));
   for (const ch of parts.right) rightCol.appendChild(renderChannel(ch, 'dm'));
 
