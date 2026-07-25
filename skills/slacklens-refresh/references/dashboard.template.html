@@ -1249,6 +1249,47 @@ function loadCache() {
   if (f) f.textContent = 'No cache loaded.';
 }
 
+// Slack DM identity is unique by participant set: there is exactly one 1:1 IM
+// per pair and one MPIM per member set. But Slack search/history can surface
+// the SAME conversation under two channel_ids (a current id plus a stale or
+// degraded one), and per-channel folding then yields two cards for one chat.
+// Derive a stable participant key from channel_name so those can be merged.
+// Returns null for non-DMs and for a nameless "Group DM" (no members to key
+// on) so unrelated cards are never collapsed together.
+function dmParticipantKey(it) {
+  if (!it || it.kind !== 'dm') return null;
+  const stripped = (it.channel_name || '').toLowerCase()
+    .replace(/^#/, '')
+    .replace(/^group dm with\s*/, '')
+    .replace(/^dm with\s*/, '')
+    .replace(/^group dm\s*\(/, '')
+    .replace(/^dm\s*\(/, '')
+    .replace(/\)\s*$/, '')
+    .replace(/^group dm\s*$/, '');
+  const people = stripped.split(',').map(s => s.trim()).filter(Boolean).sort();
+  return people.length ? people.join('|') : null;
+}
+
+// Collapse DM items that share a participant set, keeping the most recently
+// active one (highest last_ts). Non-DMs and un-keyable cards pass through
+// untouched. See dmParticipantKey for why this is safe.
+function dedupeDmConversations(list) {
+  const best = new Map();   // participant key -> surviving item
+  const out = [];
+  for (const it of list) {
+    const k = dmParticipantKey(it);
+    if (k == null) { out.push(it); continue; }
+    const prev = best.get(k);
+    if (!prev) { best.set(k, it); out.push(it); continue; }
+    if ((it.last_ts || 0) > (prev.last_ts || 0)) {
+      out[out.indexOf(prev)] = it;   // newer wins its slot
+      best.set(k, it);
+    }
+    // older duplicate dropped
+  }
+  return out;
+}
+
 // Normalize mentions + threads into a single item list
 function normalize() {
   items = [];
@@ -1464,6 +1505,9 @@ function normalize() {
       source: 'search',
     });
   }));
+
+  // Merge the same DM surfaced under multiple channel_ids into one card.
+  items = dedupeDmConversations(items);
 
   items.forEach(it => {
     it.channel_key = it.channel_id;
