@@ -1807,6 +1807,26 @@ function routeLanes(shown) {
   };
 }
 
+// Pick the lane layout for the current view. Two distinct modes:
+//   • Default (no active filter): the curated triage view — routeLanes()
+//     drops DISCUSSION/FYI and collapses WAITING/DONE into their own lanes.
+//   • Filtered (a scope/status/search filter is active): a QUERY view — the
+//     user explicitly asked to see these threads, so show EVERY matched item
+//     with no drop/collapse. Split VIP → band, non-VIP → board columns; the
+//     split is exhaustive (every item is VIP or not) so nothing is lost.
+// Without this, filtering by DISCUSSION/FYI rendered nothing (routing dropped
+// them) and WAITING/DONE filters buried matches in collapsed lanes.
+function laneLayout(shown, isFiltered) {
+  if (!isFiltered) return routeLanes(shown);
+  return {
+    band:    shown.filter(it => it.channel_is_vip),
+    board:   shown.filter(it => !it.channel_is_vip),
+    waiting: [],
+    unknown: [],
+    done:    [],
+  };
+}
+
 function renderWaitingLane(waitingItems) {
   const sec   = document.getElementById('waitingSection');
   const inner = document.getElementById('waitingInner');
@@ -1856,11 +1876,17 @@ function render() {
   rightCol.innerHTML = '';
 
   const shown = applyFilter(items);
-  // Status routing with a VIP override — see routeLanes(). Lanes render here,
-  // before the empty-state early-returns, so they persist.
-  const lanes     = routeLanes(shown);
+  // An active filter turns the dashboard into a query view (see laneLayout):
+  // show every matched thread, bypassing the curated drop/collapse routing.
+  const activelyFiltered =
+    filter.scope !== 'all' ||
+    (Array.isArray(filter.status) && filter.status.length > 0) ||
+    (filter.query || '').trim() !== '';
+  // Status routing with a VIP override — see routeLanes()/laneLayout(). Lanes
+  // render here, before the empty-state early-returns, so they persist.
+  const lanes     = laneLayout(shown, activelyFiltered);
   const parts     = partitionByChannel(lanes.board);   // non-VIP board → columns
-  const bandParts = partitionByChannel(lanes.band);     // all non-DONE VIP → band
+  const bandParts = partitionByChannel(lanes.band);     // VIP → band
   const visibleCount =
     lanes.band.length + lanes.board.length + lanes.waiting.length + lanes.done.length;
   renderWaitingLane(lanes.waiting);
@@ -1883,11 +1909,6 @@ function render() {
     vipBand.hidden = true;
     return;
   }
-
-  const activelyFiltered =
-    filter.scope !== 'all' ||
-    (Array.isArray(filter.status) && filter.status.length > 0) ||
-    (filter.query || '').trim() !== '';
 
   if (visibleCount === 0 && activelyFiltered) {
     empty.hidden = false;
@@ -2121,7 +2142,7 @@ function applyFilter(xs) {
 // filtered view) so pills always show the true totals.
 function computeCounts(allItems) {
   const counts = { all: allItems.length, needs_reply: 0, mentions: 0, dms: 0, channels: 0 };
-  const statusCounts = { 'BACKLOG': 0, 'IN PROGRESS': 0, 'WAITING': 0, 'DONE': 0, 'DISCUSSION': 0, 'AWAITING YOUR REPLY': 0 };
+  const statusCounts = { 'BACKLOG': 0, 'IN PROGRESS': 0, 'WAITING': 0, 'DONE': 0, 'DISCUSSION': 0, 'FYI': 0, 'AWAITING YOUR REPLY': 0 };
   for (const it of allItems) {
     if (it.needs_reply)         counts.needs_reply++;
     if (it.is_mention)          counts.mentions++;
