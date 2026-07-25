@@ -459,9 +459,16 @@ threads_new = keep_threads
 # Slack DMs and group DMs are continuous conversations, not reply-threads.
 # Each message carries its own `thread_ts == message_ts`, so naive cache
 # shapes end up with N standalone items for one back-and-forth session.
-# Fold all messages from the same DM channel into ONE synthetic thread
-# keyed `<channel_id>:convo` so inference sees the whole context and the
-# dashboard renders one card per DM conversation.
+# Fold all messages from the same DM conversation into ONE synthetic thread
+# so inference sees the whole context and the dashboard renders one card per
+# DM conversation.
+#
+# Slack DM identity is unique by PARTICIPANT SET (one 1:1 IM per pair, one
+# MPIM per member set), but search/history can surface the same conversation
+# under two channel_ids (a current id plus a stale/degraded one — e.g. empty
+# from_user_id + blank permalinks). Keying the fold by channel_id would then
+# leave two cards for one chat, so we key by the participant set derived from
+# channel_name and keep the most-recently-active channel_id as representative.
 #
 # Scope: 1:1 DMs (channel_id starts with "D") and group DMs (channel_name
 # starts with "Group DM" / "DM (" / "DM with") regardless of ID prefix —
@@ -475,11 +482,51 @@ def _is_dm_channel(channel_id, channel_name):
             or n.startswith("dm (")
             or n.startswith("dm with"))
 
-# Walk buckets, collect DM messages keyed by channel_id; also collect an
+# Stable per-conversation key from channel_name's member list. Mirrors the
+# dashboard's dmParticipantKey. Returns None when no members can be parsed
+# (a nameless "Group DM"), so unrelated conversations are never merged — such
+# entries fall back to keying by channel_id.
+def _dm_participant_key(channel_name):
+    n = (channel_name or "").lower()
+    n = re.sub(r"^#", "", n)
+    n = re.sub(r"^group dm with\s*", "", n)
+    n = re.sub(r"^dm with\s*", "", n)
+    n = re.sub(r"^group dm\s*\(", "", n)
+    n = re.sub(r"^dm\s*\(", "", n)
+    n = re.sub(r"\)\s*$", "", n)
+    n = re.sub(r"^group dm\s*$", "", n)
+    people = sorted(p.strip() for p in n.split(",") if p.strip())
+    return "|".join(people) if people else None
+
+def _dm_ts(v):
+    try:
+        return float(v or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+# Walk buckets, collect DM messages keyed by participant set; also collect an
 # ordered list of bucket-query indexes so we can delete the consumed
 # results afterwards (we don't want them re-rendering as standalone cards).
-dm_messages_by_channel = {}   # channel_id → {"channel_name": str, "msgs": [msg], "seen_links": set}
+# entry tracks the representative channel_id (newest-active) for the synth key.
+dm_messages_by_channel = {}   # pkey → {"channel_id","channel_name","msgs","seen_links","rep_ts"}
 bucket_consumed = {"mentions": [], "dms": [], "channels": []}  # list of (qi, ri) to drop
+
+def _dm_entry(pkey, cid, cname):
+    return dm_messages_by_channel.setdefault(pkey, {
+        "channel_id":   cid,
+        "channel_name": cname,
+        "msgs":         [],
+        "seen_links":   set(),
+        "rep_ts":       -1.0,
+    })
+
+def _dm_note_rep(entry, cid, cname, ts):
+    # Keep the channel_id (and name) of the most-recently-active source as the
+    # representative — its permalinks are the freshest and most likely valid.
+    if ts > entry["rep_ts"]:
+        entry["rep_ts"] = ts
+        entry["channel_id"] = cid
+        entry["channel_name"] = cname
 
 for bucket_key in ("mentions", "dms", "channels"):
     for qi, q in enumerate(sr.get(bucket_key) or []):
@@ -488,17 +535,15 @@ for bucket_key in ("mentions", "dms", "channels"):
             cname = r.get("channel_name") or ""
             if not _is_dm_channel(cid, cname):
                 continue
-            entry = dm_messages_by_channel.setdefault(cid, {
-                "channel_name": cname,
-                "msgs":         [],
-                "seen_links":   set(),
-            })
+            pkey = _dm_participant_key(cname) or cid
+            entry = _dm_entry(pkey, cid, cname)
             # Dedupe across buckets by permalink (falls back to ts)
             link = r.get("permalink") or (cid + ":" + (r.get("message_ts") or ""))
             if link in entry["seen_links"]:
                 bucket_consumed[bucket_key].append((qi, ri))
                 continue
             entry["seen_links"].add(link)
+            _dm_note_rep(entry, cid, cname, _dm_ts(r.get("message_ts")))
             entry["msgs"].append({
                 "from":          r.get("from_user") or "",
                 "from_user_id":  r.get("from_user_id") or "",
@@ -519,29 +564,28 @@ for tkey, t in list(threads_new.items()):
     cname = t.get("channel_name") or ""
     if not _is_dm_channel(cid, cname):
         continue
-    entry = dm_messages_by_channel.setdefault(cid, {
-        "channel_name": cname,
-        "msgs":         [],
-        "seen_links":   set(),
-    })
+    pkey = _dm_participant_key(cname) or cid
+    entry = _dm_entry(pkey, cid, cname)
     for m in t.get("messages") or []:
         link = m.get("permalink") or (cid + ":" + (m.get("ts") or ""))
         if link in entry["seen_links"]:
             continue
         entry["seen_links"].add(link)
+        _dm_note_rep(entry, cid, cname, _dm_ts(m.get("ts")))
         entry["msgs"].append(m)
     folded_thread_keys.append(tkey)
 
 for tk in folded_thread_keys:
     threads_new.pop(tk, None)
 
-# Synthesize one thread per DM channel
+# Synthesize one thread per DM conversation (keyed by participant set)
 synthesized = 0
-for cid, entry in dm_messages_by_channel.items():
+for pkey, entry in dm_messages_by_channel.items():
     if not entry["msgs"]:
         continue
     # Sort chronologically so inference reads the back-and-forth in order.
     entry["msgs"].sort(key=lambda m: float(m.get("ts") or 0))
+    cid = entry["channel_id"]   # representative (most-recently-active) id
     synth_key = cid + ":convo"
     threads_new[synth_key] = {
         "channel_id":   cid,
