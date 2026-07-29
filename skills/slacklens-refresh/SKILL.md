@@ -156,6 +156,35 @@ replies) because:
 - It's the simplest correct way to pick up edits and deletions inside
   an otherwise-cached thread.
 
+### DM / MPIM full history — capture BOTH sides
+
+Slack search returns only the OTHER party's half of a DM: the `dms`
+(`from:<@USER_ID> channel_types:im,mpim`) query returns little or nothing in
+many workspaces (it consistently comes back empty here), and DMs have no
+`thread_ts` so `slack_read_thread` never runs on them. A DM rebuilt from
+search alone is therefore missing the USER'S OWN replies — which blinds status
+inference to directionality (it can't tell the user already answered) and
+turns nearly every DM into a false `AWAITING_REPLY`.
+
+So for every distinct DM / MPIM channel seen in the `mentions` or `dms`
+buckets — plus every carried-over `:convo` thread in DELTA — read the channel
+directly to pick up the full recent back-and-forth **including the user's
+messages**:
+
+`slack_read_channel(channel_id: <D…/C… id>, oldest: "<SINCE_EPOCH>", limit: 40, response_format: "detailed")`
+
+- `oldest: SINCE_EPOCH` bounds it to the refresh window (same cutoff the
+  buckets use); still client-filter `float(message_ts) >= SINCE_EPOCH`.
+- Parse each message into the SAME per-result fields (`from_user`,
+  `from_user_id`, `message_ts`, `text`, `time`, `permalink` if present,
+  `mentioned_ids`) and append them to that channel's **`dms`** bucket results.
+  Reuse the `channel_name` from the search hit (read_channel may omit it).
+- The Step-2 DM synthesis folds these by participant set and dedupes by
+  permalink/ts, so messages that arrive from BOTH search and channel-read
+  collapse automatically — just add them, don't pre-dedupe.
+- **Cap at 30 DM channels** per refresh to bound cost. Only DM/MPIM channels
+  (`_is_dm_channel`) — public/private CHANNELS keep the mention + thread path.
+
 ### Required cache shape (the dashboard reads this exactly — v2)
 
 ```json
@@ -954,6 +983,21 @@ is pure inference done in-session.
   ("ok", "noted", "han", "han lag rha hai", "thik hai") does NOT make a thread
   IN_PROGRESS. If there is a real frontend ask the user owns but only acked →
   `BACKLOG`. If no clear ask the user owns → `DISCUSSION`/`FYI`.
+- **Whose move is it? Decide directionality FIRST.** Before picking a status,
+  find the last SUBSTANTIVE message and who sent it:
+  - Other party asks the user something still unanswered → `AWAITING_REPLY`
+    (words owed) or `BACKLOG` (work owed).
+  - User's own last message is a delivery / answer / "on it", now waiting on
+    the other side → `IN_PROGRESS` or `WAITING_ON_THEM`.
+  - User's own last message closes it out (delivered, "pushed", "done") with
+    nothing pending → `DONE`.
+  - Other party's tail is an acknowledgement / answer / sign-off → `DONE`.
+- **You may not see the user's OWN replies.** DM history in the cache can be
+  one-sided (only the other party's messages). If a thread shows just the
+  other party and their tail is an answer, an acknowledgement, or "thanks / ok
+  / sahi h", assume the user very likely ALREADY responded — prefer
+  `DONE` / `FYI` over `AWAITING_REPLY`. Reserve `AWAITING_REPLY` for when the
+  other party's LAST message is a direct, unanswered question or explicit ask.
 - **Resolution / sign-off closes a thread — it is NOT AWAITING_REPLY.**
   Read the thread TAIL and WHO sent it. If the last messages are the OTHER
   person's acknowledgement(s) or sign-off — "thanks", "ok", "got it", "great",
