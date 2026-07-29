@@ -895,7 +895,11 @@ is pure inference done in-session.
     Actions empty or one `"Follow the thread on X"`.
   - `FYI` — user passively mentioned / CC'd / informed, no action
     implied. Thank-yous, status broadcasts, cc-only pings.
-  - `DONE` — resolved. User's work (or the thread) is complete.
+  - `DONE` — resolved. The user's work (or the thread) is complete, OR the
+    other party closed it out with an acknowledgement / sign-off ("thanks",
+    "got it", "great", Hinglish "sahi h / thik hai / ho gaya / done") and
+    nothing open remains for the user. Empty actions, or
+    `["Nothing needed — already handled"]`.
 - **Choosing BACKLOG vs AWAITING_REPLY (the common confusion):**
   User being asked for *words* → `AWAITING_REPLY`. User being asked
   for *work* → `BACKLOG`. "What do you think?" = reply. "Please fix
@@ -950,6 +954,17 @@ is pure inference done in-session.
   ("ok", "noted", "han", "han lag rha hai", "thik hai") does NOT make a thread
   IN_PROGRESS. If there is a real frontend ask the user owns but only acked →
   `BACKLOG`. If no clear ask the user owns → `DISCUSSION`/`FYI`.
+- **Resolution / sign-off closes a thread — it is NOT AWAITING_REPLY.**
+  Read the thread TAIL and WHO sent it. If the last messages are the OTHER
+  person's acknowledgement(s) or sign-off — "thanks", "ok", "got it", "great",
+  "yes", Hinglish "sahi h / thik hai / theek / ho gaya / done" — with NO fresh
+  question or ask directed at the user after them, the exchange is resolved →
+  `DONE` (empty actions, or `["Nothing needed — already handled"]`). Do NOT
+  re-surface earlier questions from that thread as live actions once the other
+  party has signed off. `AWAITING_REPLY` requires an OPEN ask the user has not
+  yet answered — a question that was already discussed and then acknowledged is
+  no longer open. (Concretely: a DM that ends with the other person sending
+  "yes" / "sahi h" after a back-and-forth is DONE, not Needs-reply.)
 - **No over-bundling.** A card lists ONLY items the user owns or committed to.
   Do not fold in others' asks, items addressed to a different person, or items
   the user has not taken. (E.g. if the user said "1,2 → In Progress", surface
